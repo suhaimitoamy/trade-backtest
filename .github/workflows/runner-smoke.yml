@@ -1,0 +1,20 @@
+name: Runner Smoke Test
+
+on:
+  push:
+    branches: ["ci/rebuild-apk-20260724"]
+  pull_request:
+    branches: ["master"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify GitHub-hosted runner
+        run: |
+          echo "runner-ok"
+          uname -a
