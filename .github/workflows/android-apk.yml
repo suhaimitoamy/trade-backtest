@@ -1,0 +1,64 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: ["main", "master"]
+    paths:
+      - "android-app/**"
+      - "public/**"
+      - "api/**"
+      - "vercel.json"
+      - ".github/workflows/android-apk.yml"
+  pull_request:
+    branches: ["main", "master"]
+    paths:
+      - "android-app/**"
+      - "public/**"
+      - "api/**"
+      - "vercel.json"
+      - ".github/workflows/android-apk.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android platform
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.9"
+
+      - name: Build installable debug APK
+        env:
+          BACKTEST_WEB_URL: ${{ vars.BACKTEST_WEB_URL || 'https://trade-backtest.vercel.app' }}
+        run: |
+          gradle --no-daemon -p android-app :app:assembleDebug \
+            -PBACKTEST_WEB_URL="$BACKTEST_WEB_URL"
+          mkdir -p dist
+          cp android-app/app/build/outputs/apk/debug/app-debug.apk dist/TradeBacktest.apk
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: TradeBacktest-APK
+          path: dist/TradeBacktest.apk
+          if-no-files-found: error
+          retention-days: 30
