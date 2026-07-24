@@ -1,5 +1,6 @@
 name: Build Android APK
 
+# Triggered after GitHub Actions was enabled for this repository.
 on:
   push:
     branches: ["main", "master"]
