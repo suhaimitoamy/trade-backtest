@@ -11,10 +11,18 @@ permissions:
   contents: read
 
 jobs:
-  smoke:
-    runs-on: ubuntu-latest
+  smoke-ubuntu-22:
+    runs-on: ubuntu-22.04
     steps:
-      - name: Verify GitHub-hosted runner
+      - name: Verify Ubuntu 22.04 runner
         run: |
-          echo "runner-ok"
+          echo "runner-22-ok"
+          uname -a
+
+  smoke-ubuntu-24:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Verify Ubuntu 24.04 runner
+        run: |
+          echo "runner-24-ok"
           uname -a
