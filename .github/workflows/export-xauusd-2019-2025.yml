@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   export:
@@ -45,3 +45,36 @@ jobs:
           if-no-files-found: error
           retention-days: 3
           compression-level: 0
+
+  bundle:
+    needs: export
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout exporter branch
+        uses: actions/checkout@v4
+        with:
+          ref: data/xauusd-2019-2025-export
+
+      - name: Download all yearly artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: xauusd-*-monthly-zips
+          path: downloaded
+          merge-multiple: true
+
+      - name: Build combined archive
+        run: |
+          mkdir -p exports
+          find downloaded -type f \( -name '*.zip' -o -name '*manifest.json' \) -print0 \
+            | sort -z \
+            | xargs -0 zip -0 -j exports/XAUUSD_2019_2025_monthly_archives.zip
+          ls -lh exports/XAUUSD_2019_2025_monthly_archives.zip
+
+      - name: Commit combined archive to exporter branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -f exports/XAUUSD_2019_2025_monthly_archives.zip
+          git commit -m "data: add XAUUSD 2019-2025 monthly archive bundle"
+          git push origin HEAD:data/xauusd-2019-2025-export
