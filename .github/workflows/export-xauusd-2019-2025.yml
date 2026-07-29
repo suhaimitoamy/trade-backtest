@@ -1,0 +1,47 @@
+name: Export XAUUSD 2019-2025 candles
+
+on:
+  push:
+    branches:
+      - data/xauusd-2019-2025-export
+    paths:
+      - tools/export_xauusd_year.py
+      - .github/workflows/export-xauusd-2019-2025.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    strategy:
+      fail-fast: false
+      matrix:
+        year: [2019, 2020, 2021, 2022, 2023, 2024, 2025]
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout exporter branch
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install exporter dependencies
+        run: python -m pip install --upgrade pip pandas requests
+
+      - name: Download and package year
+        run: python tools/export_xauusd_year.py --year ${{ matrix.year }} --output artifacts
+
+      - name: Upload yearly artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: xauusd-${{ matrix.year }}-monthly-zips
+          path: |
+            artifacts/${{ matrix.year }}/*.zip
+            artifacts/${{ matrix.year }}/*manifest.json
+          if-no-files-found: error
+          retention-days: 3
+          compression-level: 0
