@@ -23,7 +23,9 @@ jobs:
       - name: Download, decode, audit, and package
         env:
           OUTPUT_DIR: ${{ runner.temp }}/xauusd-2026-repair
-        run: python tools/xauusd_2026_repair.py
+        run: |
+          sed -i 's/candles\[0\]\.isoformat()/candles[0].ts.isoformat()/g; s/candles\[-1\]\.isoformat()/candles[-1].ts.isoformat()/g' tools/xauusd_2026_repair.py
+          python tools/xauusd_2026_repair.py
       - name: Upload audited data package
         uses: actions/upload-artifact@v4
         with:
