@@ -6,6 +6,7 @@ on:
     paths:
       - '.github/workflows/xauusd-2026-dukascopy-repair.yml'
       - 'tools/xauusd_2026_repair.py'
+      - 'tools/xauusd_2026_repair_fast.py'
   workflow_dispatch:
 
 permissions:
@@ -25,7 +26,7 @@ jobs:
           OUTPUT_DIR: ${{ runner.temp }}/xauusd-2026-repair
         run: |
           sed -i 's/candles\[0\]\.isoformat()/candles[0].ts.isoformat()/g; s/candles\[-1\]\.isoformat()/candles[-1].ts.isoformat()/g' tools/xauusd_2026_repair.py
-          python tools/xauusd_2026_repair.py
+          python tools/xauusd_2026_repair_fast.py
       - name: Upload audited data package
         uses: actions/upload-artifact@v4
         with:
