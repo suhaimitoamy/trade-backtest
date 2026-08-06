@@ -68,6 +68,21 @@ def _breakdown(trades: pd.DataFrame, column: str) -> list[dict]:
     return sorted(rows, key=lambda item: item["name"])
 
 
+def _json_safe(value):
+    if value is None:
+        return None
+    try:
+        if pd.isna(value):
+            return None
+    except (TypeError, ValueError):
+        pass
+    if isinstance(value, pd.Timestamp):
+        return value.isoformat()
+    if isinstance(value, np.generic):
+        return value.item()
+    return value
+
+
 def generate_report(trades: pd.DataFrame, equity_curve: pd.DataFrame, output_dir: str = "analysis/output"):
     os.makedirs(output_dir, exist_ok=True)
     metrics = _metrics(trades, equity_curve)
@@ -119,9 +134,8 @@ def generate_report_json(trades: pd.DataFrame, equity_curve: pd.DataFrame) -> di
     preview = []
     if not trades.empty:
         available = [col for col in preview_columns if col in trades.columns]
-        preview_df = trades[available].tail(100).copy()
-        preview_df = preview_df.replace({np.nan: None})
-        preview = preview_df.to_dict(orient="records")
+        for row in trades[available].tail(100).to_dict(orient="records"):
+            preview.append({key: _json_safe(value) for key, value in row.items()})
 
     return {
         "metrics": metrics,
