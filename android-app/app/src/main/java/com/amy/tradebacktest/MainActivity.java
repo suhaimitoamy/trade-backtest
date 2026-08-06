@@ -6,6 +6,7 @@ import android.content.Intent;
 import android.graphics.Bitmap;
 import android.net.Uri;
 import android.os.Bundle;
+import android.provider.Settings;
 import android.view.View;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
@@ -20,9 +21,10 @@ public class MainActivity extends Activity {
 
     private WebView webView;
     private ValueCallback<Uri[]> filePathCallback;
+    private LocalZipBacktestBridge backtestBridge;
 
     @Override
-    @SuppressLint("SetJavaScriptEnabled")
+    @SuppressLint({"SetJavaScriptEnabled", "JavascriptInterface"})
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
@@ -33,11 +35,16 @@ public class MainActivity extends Activity {
         WebSettings settings = webView.getSettings();
         settings.setJavaScriptEnabled(true);
         settings.setDomStorageEnabled(true);
-        settings.setAllowFileAccess(false);
+        settings.setAllowFileAccess(true);
         settings.setAllowContentAccess(true);
+        settings.setAllowFileAccessFromFileURLs(false);
+        settings.setAllowUniversalAccessFromFileURLs(false);
         settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
         settings.setBuiltInZoomControls(false);
         settings.setDisplayZoomControls(false);
+
+        backtestBridge = new LocalZipBacktestBridge(this, webView);
+        webView.addJavascriptInterface(backtestBridge, "AndroidBacktest");
 
         webView.setWebChromeClient(new WebChromeClient() {
             @Override
@@ -51,14 +58,18 @@ public class MainActivity extends Activity {
                 }
                 filePathCallback = callback;
 
-                Intent intent;
-                try {
-                    intent = fileChooserParams.createIntent();
-                } catch (Exception ignored) {
-                    intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
-                    intent.addCategory(Intent.CATEGORY_OPENABLE);
-                    intent.setType("text/*");
-                }
+                Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+                intent.addCategory(Intent.CATEGORY_OPENABLE);
+                intent.setType("*/*");
+                intent.putExtra(Intent.EXTRA_MIME_TYPES, new String[]{
+                        "application/zip",
+                        "application/x-zip-compressed",
+                        "text/csv",
+                        "text/plain",
+                        "application/octet-stream"
+                });
+                intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                intent.addFlags(Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
 
                 try {
                     startActivityForResult(intent, FILE_CHOOSER_REQUEST);
@@ -84,12 +95,14 @@ public class MainActivity extends Activity {
             ) {
                 super.onReceivedError(view, request, error);
                 if (request.isForMainFrame()) {
-                    showConnectionError();
+                    showLocalPageError();
                 }
             }
         });
 
-        webView.loadUrl(BuildConfig.WEB_URL);
+        // The application UI and the multi-million-candle engine are packaged in the APK.
+        // A network connection is not required to run a selected CSV/ZIP archive.
+        webView.loadUrl("file:///android_asset/index.html");
     }
 
     @Override
@@ -100,20 +113,29 @@ public class MainActivity extends Activity {
         }
 
         Uri[] result = null;
-        if (resultCode == Activity.RESULT_OK) {
-            result = WebChromeClient.FileChooserParams.parseResult(resultCode, data);
+        if (resultCode == Activity.RESULT_OK && data != null && data.getData() != null) {
+            Uri uri = data.getData();
+            try {
+                getContentResolver().takePersistableUriPermission(
+                        uri,
+                        data.getFlags() & Intent.FLAG_GRANT_READ_URI_PERMISSION
+                );
+            } catch (Exception ignored) {
+            }
+            backtestBridge.setSelectedFile(uri);
+            result = new Uri[]{uri};
         }
         filePathCallback.onReceiveValue(result);
         filePathCallback = null;
     }
 
-    private void showConnectionError() {
+    private void showLocalPageError() {
         String html = "<!doctype html><html><head><meta name='viewport' content='width=device-width,initial-scale=1'>"
                 + "<style>body{margin:0;background:#080b12;color:#f4f7fb;font-family:sans-serif;display:grid;place-items:center;min-height:100vh;padding:24px;text-align:center}"
                 + "button{border:0;border-radius:12px;padding:14px 20px;background:#f0b84b;color:#17120a;font-weight:700}</style></head>"
-                + "<body><main><h2>Koneksi gagal</h2><p>Periksa internet atau deployment Vercel aplikasi.</p>"
-                + "<button onclick=\"location.href='" + BuildConfig.WEB_URL + "'\">Coba lagi</button></main></body></html>";
-        webView.loadDataWithBaseURL(BuildConfig.WEB_URL, html, "text/html", "UTF-8", null);
+                + "<body><main><h2>Halaman aplikasi gagal dimuat</h2><p>Instal ulang APK atau periksa hasil build GitHub Actions.</p>"
+                + "<button onclick=\"location.href='file:///android_asset/index.html'\">Muat ulang</button></main></body></html>";
+        webView.loadDataWithBaseURL("file:///android_asset/", html, "text/html", "UTF-8", null);
     }
 
     @Override
@@ -131,8 +153,12 @@ public class MainActivity extends Activity {
             filePathCallback.onReceiveValue(null);
             filePathCallback = null;
         }
+        if (backtestBridge != null) {
+            backtestBridge.cancel();
+        }
         if (webView != null) {
             webView.stopLoading();
+            webView.removeJavascriptInterface("AndroidBacktest");
             webView.destroy();
         }
         super.onDestroy();
