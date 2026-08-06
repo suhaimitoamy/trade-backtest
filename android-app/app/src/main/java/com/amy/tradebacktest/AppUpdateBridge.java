@@ -16,20 +16,25 @@ import androidx.core.content.FileProvider;
 import org.json.JSONObject;
 
 import java.io.BufferedInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.Locale;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-/** Native updater patterned after Amy FX: download, SHA-256, signing-cert check, installer. */
+/** Native updater patterned after Amy FX: native manifest check, download, SHA-256, signing-cert check, installer. */
 public final class AppUpdateBridge {
+    private static final int MAX_MANIFEST_BYTES = 2 * 1024 * 1024;
+
     private final Activity activity;
     private final WebView webView;
     private final AtomicBoolean cancelled = new AtomicBoolean(false);
+    private final AtomicBoolean checking = new AtomicBoolean(false);
     private volatile boolean running;
 
     public AppUpdateBridge(Activity activity, WebView webView) {
@@ -48,6 +53,34 @@ public final class AppUpdateBridge {
             json.put("can_install_packages", Build.VERSION.SDK_INT < 26 || activity.getPackageManager().canRequestPackageInstalls());
         } catch (Exception ignored) {}
         return json.toString();
+    }
+
+    /**
+     * Fetches the fixed release manifest through native HTTPS instead of JavaScript fetch.
+     * Local file WebViews intentionally have universal file access disabled, so browser fetch
+     * can fail with a misleading "Failed to fetch" even when Android has internet access.
+     */
+    @JavascriptInterface
+    public void checkForUpdate(String manifestUrl) {
+        if (manifestUrl == null || !manifestUrl.startsWith("https://")) {
+            emitCheckError("URL manifest update tidak aman.");
+            return;
+        }
+        if (!checking.compareAndSet(false, true)) {
+            emitCheckError("Pemeriksaan update masih berjalan.");
+            return;
+        }
+        new Thread(() -> {
+            try {
+                JSONObject manifest = readManifest(manifestUrl);
+                validateManifest(manifest);
+                emit("onManifest", manifest);
+            } catch (Exception error) {
+                emitCheckError(safe(error));
+            } finally {
+                checking.set(false);
+            }
+        }, "app-update-check").start();
     }
 
     @JavascriptInterface
@@ -91,6 +124,56 @@ public final class AppUpdateBridge {
     }
 
     @JavascriptInterface public void cancelAppUpdate() { cancelled.set(true); }
+
+    private JSONObject readManifest(String manifestUrl) throws Exception {
+        HttpURLConnection connection = (HttpURLConnection) new URL(manifestUrl).openConnection();
+        connection.setConnectTimeout(20_000);
+        connection.setReadTimeout(30_000);
+        connection.setInstanceFollowRedirects(true);
+        connection.setRequestProperty("Accept", "application/json,application/octet-stream");
+        connection.setRequestProperty("Cache-Control", "no-cache");
+        connection.setRequestProperty("User-Agent", "Trading-Method-Lab/" + BuildConfig.VERSION_NAME);
+        int status = connection.getResponseCode();
+        if (status < 200 || status >= 300) {
+            connection.disconnect();
+            throw new IllegalStateException("Server manifest HTTP " + status + ".");
+        }
+        try (InputStream input = new BufferedInputStream(connection.getInputStream(), 32 * 1024);
+             ByteArrayOutputStream output = new ByteArrayOutputStream()) {
+            byte[] buffer = new byte[16 * 1024];
+            int read;
+            int total = 0;
+            while ((read = input.read(buffer)) >= 0) {
+                total += read;
+                if (total > MAX_MANIFEST_BYTES) throw new IllegalStateException("Manifest update terlalu besar.");
+                output.write(buffer, 0, read);
+            }
+            return new JSONObject(output.toString(StandardCharsets.UTF_8.name()));
+        } finally {
+            connection.disconnect();
+        }
+    }
+
+    private static void validateManifest(JSONObject manifest) throws Exception {
+        if (!manifest.has("version_code") || manifest.optInt("version_code", -1) < 1) {
+            throw new IllegalStateException("version_code manifest tidak valid.");
+        }
+        if (manifest.optString("version_name", "").trim().isEmpty()) {
+            throw new IllegalStateException("version_name manifest kosong.");
+        }
+        String downloadUrl = manifest.optString("download_url", "");
+        if (!downloadUrl.startsWith("https://")) {
+            throw new SecurityException("download_url manifest tidak aman.");
+        }
+        String sha = normalizeFingerprint(manifest.optString("sha256", ""));
+        if (!sha.matches("[0-9a-f]{64}")) {
+            throw new SecurityException("SHA-256 manifest tidak valid.");
+        }
+        String certificate = normalizeFingerprint(manifest.optString("signing_cert_sha256", ""));
+        if (!certificate.matches("[0-9a-f]{64}")) {
+            throw new SecurityException("Fingerprint sertifikat manifest tidak valid.");
+        }
+    }
 
     private void download(String downloadUrl, File target) throws Exception {
         HttpURLConnection connection = (HttpURLConnection) new URL(downloadUrl).openConnection();
@@ -199,6 +282,7 @@ public final class AppUpdateBridge {
     }
 
     private void emitNeedsPermission() { emit("onNeedsInstallPermission", new JSONObject()); }
+    private void emitCheckError(String message) { JSONObject json = new JSONObject(); try { json.put("message", message); } catch (Exception ignored) {} emit("onCheckError", json); }
     private void emitError(String message) { JSONObject json = new JSONObject(); try { json.put("message", message); } catch (Exception ignored) {} emit("onError", json); }
     private void emit(String callback, JSONObject payload) {
         String script = "window.NativeUpdater && window.NativeUpdater." + callback + "(" + payload.toString() + ");";
