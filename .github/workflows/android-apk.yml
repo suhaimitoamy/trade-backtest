@@ -1,36 +1,96 @@
-name: Build Android APK
+name: Build Sweep Acceptance Preview APK
 
-# Triggered after GitHub Actions was enabled for this repository.
 on:
+  workflow_dispatch:
+    inputs:
+      versionName:
+        description: "Preview version name"
+        required: true
+        default: "2.0.0-preview"
+      versionCode:
+        description: "Preview version code"
+        required: true
+        default: "2000"
+      webUrl:
+        description: "Deployed Vercel URL loaded by the Android app"
+        required: true
+        default: "https://trade-backtest.vercel.app"
   push:
-    branches: ["main", "master"]
+    branches:
+      - feature/acceptance-sweep-app-20260806
     paths:
       - "android-app/**"
       - "public/**"
       - "api/**"
-      - "vercel.json"
+      - "analysis/**"
+      - "engine/**"
+      - "strategies/**"
+      - "tests/**"
+      - "config.py"
+      - "requirements.txt"
       - ".github/workflows/android-apk.yml"
   pull_request:
-    branches: ["main", "master"]
+    branches: ["master"]
     paths:
       - "android-app/**"
       - "public/**"
       - "api/**"
-      - "vercel.json"
+      - "analysis/**"
+      - "engine/**"
+      - "strategies/**"
+      - "tests/**"
+      - "config.py"
+      - "requirements.txt"
       - ".github/workflows/android-apk.yml"
-  workflow_dispatch:
 
 permissions:
   contents: read
 
+concurrency:
+  group: sweep-acceptance-preview-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  build-apk:
+  test-and-build:
     runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      APP_VERSION_NAME: ${{ github.event.inputs.versionName || '2.0.0-preview' }}
+      APP_VERSION_CODE: ${{ github.event.inputs.versionCode || '2000' }}
+      BACKTEST_WEB_URL: ${{ github.event.inputs.webUrl || vars.BACKTEST_WEB_URL || 'https://trade-backtest.vercel.app' }}
+      APP_LABEL: Sweep Acceptance Lab
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Java
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pytest
+
+      - name: Run strategy regression tests
+        run: |
+          python -m compileall api analysis engine strategies
+          pytest -q
+
+      - name: Smoke-test API engine
+        run: |
+          python - <<'PY'
+          from api.index import BacktestRequest, _run
+          result = _run(BacktestRequest())
+          assert result['run']['execution'] == 'signal_on_close_entry_next_open'
+          assert 'profit_factor' in result['metrics']
+          print(result['metrics'])
+          PY
+
+      - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -47,19 +107,28 @@ jobs:
         with:
           gradle-version: "8.9"
 
-      - name: Build installable debug APK
-        env:
-          BACKTEST_WEB_URL: ${{ vars.BACKTEST_WEB_URL || 'https://trade-backtest.vercel.app' }}
+      - name: Build installable preview APK
         run: |
           gradle --no-daemon -p android-app :app:assembleDebug \
-            -PBACKTEST_WEB_URL="$BACKTEST_WEB_URL"
-          mkdir -p dist
-          cp android-app/app/build/outputs/apk/debug/app-debug.apk dist/TradeBacktest.apk
+            -PBACKTEST_WEB_URL="$BACKTEST_WEB_URL" \
+            -PAPP_VERSION_NAME="$APP_VERSION_NAME" \
+            -PAPP_VERSION_CODE="$APP_VERSION_CODE" \
+            -PAPP_LABEL="$APP_LABEL"
 
-      - name: Upload APK artifact
+      - name: Verify APK identity and signature
+        run: |
+          set -euo pipefail
+          apk="android-app/app/build/outputs/apk/debug/app-debug.apk"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$apk" \
+            | grep -F "package: name='com.amy.sweepacceptancelab.debug' versionCode='${APP_VERSION_CODE}' versionName='${APP_VERSION_NAME}-debug'"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$apk"
+          mkdir -p dist
+          cp "$apk" "dist/Sweep-Acceptance-Lab-v${APP_VERSION_NAME}.apk"
+
+      - name: Upload installable APK
         uses: actions/upload-artifact@v4
         with:
-          name: TradeBacktest-APK
-          path: dist/TradeBacktest.apk
+          name: Sweep-Acceptance-Lab-v${{ env.APP_VERSION_NAME }}
+          path: dist/Sweep-Acceptance-Lab-v${{ env.APP_VERSION_NAME }}.apk
           if-no-files-found: error
           retention-days: 30
