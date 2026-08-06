@@ -1,4 +1,4 @@
-name: Build Sweep Acceptance Preview APK
+name: Build Trading Method Lab Preview APK
 
 on:
   workflow_dispatch:
@@ -6,11 +6,11 @@ on:
       versionName:
         description: "Preview version name"
         required: true
-        default: "2.2.0-preview"
+        default: "2.3.0-preview"
       versionCode:
         description: "Preview version code"
         required: true
-        default: "2200"
+        default: "2300"
       webUrl:
         description: "Optional Vercel URL retained for compatibility"
         required: true
@@ -47,7 +47,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: sweep-acceptance-preview-${{ github.ref }}
+  group: trading-method-lab-preview-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -55,10 +55,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
-      APP_VERSION_NAME: ${{ github.event.inputs.versionName || '2.2.0-preview' }}
-      APP_VERSION_CODE: ${{ github.event.inputs.versionCode || '2200' }}
+      APP_VERSION_NAME: ${{ github.event.inputs.versionName || '2.3.0-preview' }}
+      APP_VERSION_CODE: ${{ github.event.inputs.versionCode || '2300' }}
       BACKTEST_WEB_URL: ${{ github.event.inputs.webUrl || vars.BACKTEST_WEB_URL || 'https://trade-backtest.vercel.app' }}
-      APP_LABEL: Sweep Acceptance Lab
+      APP_LABEL: Trading Method Lab
       PYTHONPATH: ${{ github.workspace }}
 
     steps:
@@ -116,23 +116,26 @@ jobs:
             -PAPP_VERSION_CODE="$APP_VERSION_CODE" \
             -PAPP_LABEL="$APP_LABEL"
 
-      - name: Verify APK identity, multi-file UI and signature
+      - name: Verify APK identity, builder UI and signature
         run: |
           set -euo pipefail
           apk="android-app/app/build/outputs/apk/debug/app-debug.apk"
           "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$apk" \
             | grep -F "package: name='com.amy.sweepacceptancelab.debug' versionCode='${APP_VERSION_CODE}' versionName='${APP_VERSION_NAME}-debug'"
           unzip -Z1 "$apk" | grep -F "assets/index.html"
-          unzip -p "$apk" assets/index.html | grep -F "Pilih satu atau banyak CSV/ZIP"
-          unzip -p "$apk" assets/index.html | grep -F "id=\"timeframe\""
+          unzip -p "$apk" assets/index.html | grep -F "Buat metode sendiri"
+          unzip -p "$apk" assets/index.html | grep -F "AndroidMethodBuilder"
+          test -f android-app/app/src/main/java/com/amy/tradebacktest/MethodBuilderBridge.java
+          grep -F "case \"RBS_RETEST\"" android-app/app/src/main/java/com/amy/tradebacktest/MethodBuilderBridge.java
+          grep -F "case \"SBR_RETEST\"" android-app/app/src/main/java/com/amy/tradebacktest/MethodBuilderBridge.java
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$apk"
           mkdir -p dist
-          cp "$apk" "dist/Sweep-Acceptance-Lab-v${APP_VERSION_NAME}.apk"
+          cp "$apk" "dist/Trading-Method-Lab-v${APP_VERSION_NAME}.apk"
 
       - name: Upload installable APK
         uses: actions/upload-artifact@v4
         with:
-          name: Sweep-Acceptance-Lab-v${{ env.APP_VERSION_NAME }}
-          path: dist/Sweep-Acceptance-Lab-v${{ env.APP_VERSION_NAME }}.apk
+          name: Trading-Method-Lab-v${{ env.APP_VERSION_NAME }}
+          path: dist/Trading-Method-Lab-v${{ env.APP_VERSION_NAME }}.apk
           if-no-files-found: error
           retention-days: 30
