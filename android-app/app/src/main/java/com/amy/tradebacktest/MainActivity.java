@@ -74,7 +74,25 @@ public class MainActivity extends Activity {
         });
 
         webView.setWebViewClient(new WebViewClient() {
-            @Override public void onPageStarted(WebView view, String url, Bitmap favicon) { super.onPageStarted(view, url, favicon); }
+            @Override public void onPageStarted(WebView view, String url, Bitmap favicon) {
+                super.onPageStarted(view, url, favicon);
+            }
+
+            @Override public void onPageFinished(WebView view, String url) {
+                super.onPageFinished(view, url);
+                if (url != null && url.startsWith("file:///android_asset/index.html")) {
+                    String loader = "(function(){"
+                            + "if(document.getElementById('tml-mobile-ui-patch'))return;"
+                            + "var s=document.createElement('script');"
+                            + "s.id='tml-mobile-ui-patch';"
+                            + "s.src='file:///android_asset/mobile-ui-patch.js';"
+                            + "s.onerror=function(){var e=document.getElementById('status');if(e)e.textContent='Patch UI mobile gagal dimuat.';};"
+                            + "document.body.appendChild(s);"
+                            + "})();";
+                    view.evaluateJavascript(loader, null);
+                }
+            }
+
             @Override public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
                 super.onReceivedError(view, request, error);
                 if (request.isForMainFrame()) showLocalPageError();
