@@ -2,8 +2,8 @@ plugins {
     id("com.android.application") version "8.7.3"
 }
 
-val configuredVersionName = providers.gradleProperty("APP_VERSION_NAME").orElse("2.4.0-preview")
-val configuredVersionCode = providers.gradleProperty("APP_VERSION_CODE").orElse("2400")
+val configuredVersionName = providers.gradleProperty("APP_VERSION_NAME").orElse("2.5.0-preview")
+val configuredVersionCode = providers.gradleProperty("APP_VERSION_CODE").orElse("2500")
 val configuredAppLabel = providers.gradleProperty("APP_LABEL").orElse("Trading Method Lab")
 val keystorePath = providers.gradleProperty("TML_KEYSTORE_PATH")
 val keystorePassword = providers.gradleProperty("TML_KEYSTORE_PASSWORD").orElse("changeit-preview")
