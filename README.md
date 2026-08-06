@@ -1,54 +1,113 @@
-# Python Backtest Engine (FastAPI + Vercel)
+# Trading Method Lab
 
-A modular, multi-strategy backtesting engine in Python suitable for Termux, designed to run as a **FastAPI backend on Vercel** or locally via CLI.
+A modular Python backtest engine, FastAPI/Vercel dashboard, and installable Android application for testing fixed presets or building a trading method from no-code condition blocks.
 
-## Project Structure
-- `api/index.py`: FastAPI serverless endpoint for Vercel.
-- `data/`: CSV data folder. Data should have columns: `timestamp`, `open`, `high`, `low`, `close`, `volume`.
-- `strategies/`: Folder for strategy files.
-- `engine/backtest.py`: The core engine that processes strategies candle-by-candle.
-- `analysis/report.py`: Analytics and equity curve generation (returns Base64 image & JSON).
-- `config.py`: Main configuration for active strategy, data path, and risk management.
-- `vercel.json`: Vercel routing configuration.
-- `.github/workflows/backtest.yml`: GitHub Actions CI/CD configuration.
+## Android large-data mode
 
-## How to Add a New Strategy
-1. **Create a new file** in `strategies/` (e.g., `ict_smc.py`).
-2. **Implement `BaseStrategy`**:
-   ```python
-   from .base import BaseStrategy
+The APK contains an offline dashboard and native Java streaming engines. Candle archives are not uploaded to Vercel.
 
-   class ICTStrategy(BaseStrategy):
-       def detect_bias(self, data, current_idx):
-           # Return 1 (Long), -1 (Short), or 0 (Neutral)
-           pass
-           
-       def detect_entry(self, data, current_idx, bias):
-           # Return True if entry condition is met
-           pass
-           
-       def get_sl_tp(self, data, current_idx, bias):
-           # Return tuple: (StopLoss, TakeProfit)
-           pass
-   ```
-3. **Register your strategy** in `strategies/__init__.py`:
-   ```python
-   from .ict_smc import ICTStrategy
-   STRATEGIES['ict_smc'] = ICTStrategy
-   ```
-4. **Update `config.py`** to use `'ict_smc'`.
+- Select multiple annual ZIP archives from Android storage or the Google Drive file provider.
+- Supports CSV/TXT, ZIP containing monthly candle files, and annual ZIP containing nested monthly ZIP archives.
+- Select one timeframe per run: M1, M5, M15, H1, H4, or D1.
+- Data is read line by line; the complete multi-million-candle archive is never loaded into RAM.
+- Indicator, pending signal, open position, equity, and drawdown state continue across monthly and annual file boundaries.
+- Strict validation cancels a result when OHLC is invalid, timestamps are duplicated, or time moves backward.
+- Signals use completed candles and enter at the next candle open.
+- If SL and TP are touched in the same candle, the conservative `SL first` assumption is used.
 
-## Running Locally (CLI)
-1. Install requirements: `pip install -r requirements.txt`
-2. Run data generation: `python generate_dummy_data.py`
-3. Run the backtest: `python main.py`
+The browser/Vercel API remains limited to small CSV requests. The native Android engine has no hard 250,000-candle limit.
 
-## Running Locally (FastAPI API)
-You can run the API server locally to test the Vercel integration:
-1. `uvicorn api.index:app --reload --host 0.0.0.0 --port 8000`
-2. Open `http://localhost:8000/api/backtest` in your browser.
+## No-code Method Builder
 
-## Deployment to Vercel
-1. Generate your data first so it exists in the repo: `python generate_dummy_data.py`
-2. Commit your code to GitHub.
-3. Import the repository in Vercel. Vercel will automatically use `@vercel/python` thanks to `vercel.json` and serve `/api/backtest`.
+APK v2.3 adds a separate native custom-method engine in `MethodBuilderBridge.java`.
+
+The user can create independent BUY and SELL rule sets, choose `ALL` or `ANY` logic, mirror BUY rules to SELL, save methods locally on the device, and choose execution parameters.
+
+Available condition blocks include:
+
+- bullish or bearish candle;
+- body, wick, and close-location ratios;
+- candle range relative to ATR;
+- EMA fast/slow trend and EMA slope;
+- rolling-high/low breakout;
+- sweep and reclaim;
+- RBS retest and SBR retest;
+- price position inside the rolling range;
+- distance from rolling high/low in ATR;
+- consecutive bullish/bearish candles;
+- close beyond the previous candle;
+- one-candle higher-high/higher-low or lower-high/lower-low structure;
+- UTC session-hour range.
+
+Custom Stop Loss modes:
+
+- ATR only;
+- signal-candle extreme with an ATR minimum;
+- rolling high/low with an ATR minimum.
+
+The builder executes only predefined, validated rule blocks. It does not execute arbitrary code and does not automatically optimize rules against historical results.
+
+## Built-in Sweep / Acceptance preset
+
+The original preset remains available:
+
+- `SWEEP_LOW_RECLAIM` → Long after price trades below the rolling low and closes back above it.
+- `SWEEP_HIGH_RECLAIM` → mirrored Short signal.
+- `ACCEPTANCE_ABOVE` → Long after consecutive closes remain above the rolling high with body and close-location requirements.
+- `ACCEPTANCE_BELOW` → mirrored Short signal.
+
+## Results
+
+The application reports:
+
+- total trades and win rate;
+- profit factor and expectancy in R;
+- total R and monetary PnL;
+- maximum drawdown;
+- setup and direction breakdowns;
+- compacted equity curve;
+- the latest 100 trades.
+
+## CSV format
+
+```text
+timestamp,open,high,low,close,volume
+```
+
+`volume` is optional. `date` + `time`, `datetime`, and `timestamp` formats are accepted. Comma, semicolon, and tab delimiters are detected automatically.
+
+## Project structure
+
+- `android-app/app/src/main/java/com/amy/tradebacktest/MethodBuilderBridge.java` — no-code custom rule evaluator and native streaming backtest engine.
+- `android-app/app/src/main/java/com/amy/tradebacktest/LocalZipBacktestBridge.java` — built-in Sweep/Acceptance native engine.
+- `android-app/app/src/main/java/com/amy/tradebacktest/MainActivity.java` — multi-file picker and JavaScript bridges.
+- `public/index.html` — offline/mobile dashboard and Method Builder UI.
+- `strategies/acceptance_sweep.py` — Python/API preset strategy.
+- `engine/backtest.py` — Python next-open candle engine.
+- `api/index.py` — FastAPI endpoint for small browser runs.
+- `analysis/report.py` — Python metrics and charts.
+- `tests/test_acceptance_sweep.py` — preset execution regression tests.
+
+## Run Python locally
+
+```bash
+pip install -r requirements.txt pytest
+pytest -q
+uvicorn api.index:app --reload --host 0.0.0.0 --port 8000
+```
+
+## Build Android APK
+
+GitHub Actions workflow: **Build Trading Method Lab Preview APK**.
+
+The workflow runs Python tests and API smoke tests, compiles both native Android engines, packages the offline dashboard, verifies the builder UI and APK signature, and uploads an installable artifact.
+
+Android package:
+
+```text
+com.amy.sweepacceptancelab.debug
+```
+
+## Important limitation
+
+This repository is a testing laboratory, not a claim that any preset or user-built method is profitable. A result is meaningful only when costs, sample size, timeframe, untouched out-of-sample periods, and parameter stability are evaluated honestly.
