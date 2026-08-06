@@ -59,6 +59,7 @@ jobs:
       APP_VERSION_CODE: ${{ github.event.inputs.versionCode || '2000' }}
       BACKTEST_WEB_URL: ${{ github.event.inputs.webUrl || vars.BACKTEST_WEB_URL || 'https://trade-backtest.vercel.app' }}
       APP_LABEL: Sweep Acceptance Lab
+      PYTHONPATH: ${{ github.workspace }}
 
     steps:
       - name: Checkout repository
@@ -78,7 +79,7 @@ jobs:
       - name: Run strategy regression tests
         run: |
           python -m compileall api analysis engine strategies
-          pytest -q
+          python -m pytest -q
 
       - name: Smoke-test API engine
         run: |
