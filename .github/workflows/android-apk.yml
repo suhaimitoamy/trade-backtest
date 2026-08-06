@@ -1,66 +1,54 @@
-name: Build Trading Method Lab Preview APK
+name: Build Trading Method Lab Update APK
 
 on:
   workflow_dispatch:
     inputs:
       versionName:
-        description: "Preview version name"
+        description: "Version name"
         required: true
-        default: "2.3.0-preview"
+        default: "2.4.0-preview"
       versionCode:
-        description: "Preview version code"
+        description: "Monotonic version code"
         required: true
-        default: "2300"
-      webUrl:
-        description: "Optional Vercel URL retained for compatibility"
-        required: true
-        default: "https://trade-backtest.vercel.app"
+        default: "2400"
+      notes:
+        description: "Update notes"
+        required: false
+        default: "ICT blocks, method audit, EMA isolation, remote method packs, and in-app updates."
   push:
-    branches:
-      - feature/acceptance-sweep-app-20260806
+    branches: ["feature/acceptance-sweep-app-20260806"]
     paths:
       - "android-app/**"
       - "public/**"
-      - "api/**"
-      - "analysis/**"
-      - "engine/**"
-      - "strategies/**"
-      - "tests/**"
-      - "config.py"
-      - "requirements.txt"
       - ".github/workflows/android-apk.yml"
   pull_request:
     branches: ["master"]
     paths:
       - "android-app/**"
       - "public/**"
-      - "api/**"
-      - "analysis/**"
-      - "engine/**"
-      - "strategies/**"
-      - "tests/**"
-      - "config.py"
-      - "requirements.txt"
       - ".github/workflows/android-apk.yml"
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
-  group: trading-method-lab-preview-${{ github.ref }}
+  group: trading-method-lab-update-${{ github.ref }}
   cancel-in-progress: true
 
-jobs:
-  test-and-build:
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
-    env:
-      APP_VERSION_NAME: ${{ github.event.inputs.versionName || '2.3.0-preview' }}
-      APP_VERSION_CODE: ${{ github.event.inputs.versionCode || '2300' }}
-      BACKTEST_WEB_URL: ${{ github.event.inputs.webUrl || vars.BACKTEST_WEB_URL || 'https://trade-backtest.vercel.app' }}
-      APP_LABEL: Trading Method Lab
-      PYTHONPATH: ${{ github.workspace }}
+env:
+  APP_VERSION_NAME: ${{ github.event.inputs.versionName || '2.4.0-preview' }}
+  APP_VERSION_CODE: ${{ github.event.inputs.versionCode || '2400' }}
+  UPDATE_NOTES: ${{ github.event.inputs.notes || 'ICT blocks, method audit, EMA isolation, remote method packs, and in-app updates.' }}
+  APP_LABEL: Trading Method Lab
+  KEYSTORE_PASSWORD: changeit-preview
+  KEY_ALIAS: trading-method-lab
+  KEY_PASSWORD: changeit-preview
+  RELEASE_TAG: trading-method-lab-preview
 
+jobs:
+  test-build-publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -76,26 +64,43 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt pytest
 
-      - name: Run strategy regression tests
+      - name: Run Python regression tests
         run: |
           python -m compileall api analysis engine strategies
           python -m pytest -q
-
-      - name: Smoke-test API engine
-        run: |
-          python - <<'PY'
-          from api.index import BacktestRequest, _run
-          result = _run(BacktestRequest())
-          assert result['run']['execution'] == 'signal_on_close_entry_next_open'
-          assert 'profit_factor' in result['metrics']
-          print(result['metrics'])
-          PY
 
       - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "17"
+
+      - name: Run pure Java rule-core audit tests
+        run: |
+          mkdir -p build/rule-core
+          javac -d build/rule-core \
+            android-app/app/src/main/java/com/amy/tradebacktest/MethodRuleCore.java \
+            android-app/app/src/test/java/com/amy/tradebacktest/MethodRuleCoreSelfTest.java
+          java -cp build/rule-core com.amy.tradebacktest.MethodRuleCoreSelfTest
+
+      - name: Restore stable preview signing key
+        id: signing-cache
+        uses: actions/cache@v4
+        with:
+          path: .github/.signing/trading-method-lab.jks
+          key: trading-method-lab-signing-v1
+
+      - name: Create signing key once
+        if: steps.signing-cache.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p .github/.signing
+          keytool -genkeypair -v \
+            -keystore .github/.signing/trading-method-lab.jks \
+            -storepass "$KEYSTORE_PASSWORD" \
+            -keypass "$KEY_PASSWORD" \
+            -alias "$KEY_ALIAS" \
+            -keyalg RSA -keysize 3072 -validity 10000 \
+            -dname "CN=Trading Method Lab, OU=Amy FX Workflow, O=suhaimitoamy, L=Local, C=ID"
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
@@ -108,34 +113,85 @@ jobs:
         with:
           gradle-version: "8.9"
 
-      - name: Build installable preview APK
+      - name: Build stable-signed release APK
         run: |
-          gradle --no-daemon -p android-app :app:assembleDebug \
-            -PBACKTEST_WEB_URL="$BACKTEST_WEB_URL" \
+          gradle --no-daemon -p android-app :app:assembleRelease \
             -PAPP_VERSION_NAME="$APP_VERSION_NAME" \
             -PAPP_VERSION_CODE="$APP_VERSION_CODE" \
-            -PAPP_LABEL="$APP_LABEL"
+            -PAPP_LABEL="$APP_LABEL" \
+            -PTML_KEYSTORE_PATH="${GITHUB_WORKSPACE}/.github/.signing/trading-method-lab.jks" \
+            -PTML_KEYSTORE_PASSWORD="$KEYSTORE_PASSWORD" \
+            -PTML_KEY_ALIAS="$KEY_ALIAS" \
+            -PTML_KEY_PASSWORD="$KEY_PASSWORD"
 
-      - name: Verify APK identity, builder UI and signature
+      - name: Verify identity, ICT builder, audit and signature
         run: |
           set -euo pipefail
-          apk="android-app/app/build/outputs/apk/debug/app-debug.apk"
+          apk="android-app/app/build/outputs/apk/release/app-release.apk"
           "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$apk" \
-            | grep -F "package: name='com.amy.sweepacceptancelab.debug' versionCode='${APP_VERSION_CODE}' versionName='${APP_VERSION_NAME}-debug'"
+            | grep -F "package: name='com.amy.sweepacceptancelab' versionCode='${APP_VERSION_CODE}' versionName='${APP_VERSION_NAME}'"
           unzip -Z1 "$apk" | grep -F "assets/index.html"
-          unzip -p "$apk" assets/index.html | grep -F "Buat metode sendiri"
-          unzip -p "$apk" assets/index.html | grep -F "AndroidMethodBuilder"
-          test -f android-app/app/src/main/java/com/amy/tradebacktest/MethodBuilderBridge.java
-          grep -F "case \"RBS_RETEST\"" android-app/app/src/main/java/com/amy/tradebacktest/MethodBuilderBridge.java
-          grep -F "case \"SBR_RETEST\"" android-app/app/src/main/java/com/amy/tradebacktest/MethodBuilderBridge.java
-          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$apk"
-          mkdir -p dist
-          cp "$apk" "dist/Trading-Method-Lab-v${APP_VERSION_NAME}.apk"
+          unzip -Z1 "$apk" | grep -F "assets/method-pack.json"
+          unzip -p "$apk" assets/index.html | grep -F "Pusat pembaruan"
+          unzip -p "$apk" assets/index.html | grep -F "AndroidUpdater"
+          unzip -p "$apk" assets/method-pack.json | grep -F "ICT: liquidity sweep + MSS + FVG"
+          grep -F "requirements.ema" android-app/app/src/main/java/com/amy/tradebacktest/AdvancedMethodBacktestBridge.java
+          grep -F "EMA nonaktif" public/index.html
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs "$apk"
 
-      - name: Upload installable APK
+      - name: Create update package and manifest
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          apk_src="android-app/app/build/outputs/apk/release/app-release.apk"
+          apk_name="Trading-Method-Lab-v${APP_VERSION_NAME}.apk"
+          cp "$apk_src" "dist/$apk_name"
+          sha256="$(sha256sum "dist/$apk_name" | awk '{print $1}')"
+          cert="$("$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs "dist/$apk_name" | awk -F': ' '/Signer #1 certificate SHA-256 digest/{print $2; exit}' | tr -d ':' | tr '[:upper:]' '[:lower:]')"
+          download_url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${RELEASE_TAG}/${apk_name}"
+          python - <<PY
+          import json, os
+          manifest = {
+              "schema_version": 1,
+              "channel": "preview",
+              "version_code": int(os.environ["APP_VERSION_CODE"]),
+              "version_name": os.environ["APP_VERSION_NAME"],
+              "download_url": "${download_url}",
+              "sha256": "${sha256}",
+              "signing_cert_sha256": "${cert}",
+              "minimum_android": 24,
+              "notes": os.environ.get("UPDATE_NOTES", ""),
+              "method_pack_url": "https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/${GITHUB_REF_NAME}/public/method-pack.json"
+          }
+          with open("dist/update-manifest.json", "w", encoding="utf-8") as handle:
+              json.dump(manifest, handle, ensure_ascii=False, indent=2)
+          print(json.dumps(manifest, indent=2))
+          PY
+
+      - name: Upload workflow artifact
         uses: actions/upload-artifact@v4
         with:
           name: Trading-Method-Lab-v${{ env.APP_VERSION_NAME }}
-          path: dist/Trading-Method-Lab-v${{ env.APP_VERSION_NAME }}.apk
+          path: |
+            dist/Trading-Method-Lab-v${{ env.APP_VERSION_NAME }}.apk
+            dist/update-manifest.json
           if-no-files-found: error
           retention-days: 30
+
+      - name: Publish fixed preview release channel
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" \
+              "dist/Trading-Method-Lab-v${APP_VERSION_NAME}.apk" \
+              "dist/update-manifest.json" --clobber
+            gh release edit "$RELEASE_TAG" --title "Trading Method Lab Preview" --notes "$UPDATE_NOTES" --prerelease
+          else
+            gh release create "$RELEASE_TAG" \
+              "dist/Trading-Method-Lab-v${APP_VERSION_NAME}.apk" \
+              "dist/update-manifest.json" \
+              --title "Trading Method Lab Preview" --notes "$UPDATE_NOTES" --prerelease --target "$GITHUB_SHA"
+          fi
