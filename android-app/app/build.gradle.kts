@@ -17,7 +17,7 @@ android {
 
     defaultConfig {
         applicationId = "com.amy.sweepacceptancelab"
-        minSdk = 23
+        minSdk = 24
         targetSdk = 35
         versionCode = configuredVersionCode.get().toInt()
         versionName = configuredVersionName.get()
