@@ -15,7 +15,6 @@ import org.json.JSONObject;
 import java.io.BufferedInputStream;
 import java.io.BufferedReader;
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -25,7 +24,6 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -37,23 +35,24 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
 /**
- * Native streaming backtest bridge.
+ * Native local streaming engine for very large candle archives.
  *
- * ZIP/CSV data is read locally through Android's Storage Access Framework. The
- * implementation never loads the full candle archive into memory, so multi-million
- * candle archives can be processed while preserving indicator and trade state across
- * monthly file boundaries.
+ * The bridge accepts multiple CSV/ZIP files from Android Storage Access Framework,
+ * including Google Drive. Annual ZIP -> monthly ZIP -> timeframe CSV is supported.
+ * Only the timeframe selected in the UI is processed; other timeframe files and
+ * audit reports are ignored rather than mixed into one candle stream.
  */
 public final class LocalZipBacktestBridge {
     private static final int MAX_ZIP_DEPTH = 3;
     private static final long PROGRESS_EVERY_CANDLES = 100_000L;
+    private static final String[] KNOWN_TIMEFRAMES = {"M1", "M5", "M15", "H1", "H4", "D1"};
 
     private final Activity activity;
     private final WebView webView;
     private final AtomicBoolean cancelled = new AtomicBoolean(false);
+    private final Object selectionLock = new Object();
+    private final List<SelectedFile> selectedFiles = new ArrayList<>();
 
-    private volatile Uri selectedUri;
-    private volatile String selectedName = "";
     private volatile boolean running = false;
 
     public LocalZipBacktestBridge(Activity activity, WebView webView) {
@@ -61,22 +60,41 @@ public final class LocalZipBacktestBridge {
         this.webView = webView;
     }
 
-    public void setSelectedFile(Uri uri) {
-        selectedUri = uri;
-        selectedName = queryDisplayName(uri);
+    public void setSelectedFiles(List<Uri> uris) {
+        List<SelectedFile> replacement = new ArrayList<>();
+        for (Uri uri : uris) {
+            if (uri != null) {
+                replacement.add(new SelectedFile(uri, queryDisplayName(uri)));
+            }
+        }
+        replacement.sort((left, right) -> naturalCompare(left.name, right.name));
+
+        synchronized (selectionLock) {
+            selectedFiles.clear();
+            selectedFiles.addAll(replacement);
+        }
+
         JSONObject payload = new JSONObject();
         try {
-            payload.put("name", selectedName);
-            payload.put("uri", String.valueOf(uri));
+            payload.put("count", replacement.size());
+            JSONArray names = new JSONArray();
+            for (SelectedFile file : replacement) {
+                names.put(file.name);
+            }
+            payload.put("names", names);
+            payload.put("name", selectionSummary(replacement));
         } catch (JSONException ignored) {
         }
         emit("onFileSelected", payload);
     }
 
-    private String queryDisplayName(Uri uri) {
-        if (uri == null) {
-            return "";
+    private List<SelectedFile> selectionSnapshot() {
+        synchronized (selectionLock) {
+            return new ArrayList<>(selectedFiles);
         }
+    }
+
+    private String queryDisplayName(Uri uri) {
         ContentResolver resolver = activity.getContentResolver();
         try (Cursor cursor = resolver.query(uri, null, null, null, null)) {
             if (cursor != null && cursor.moveToFirst()) {
@@ -84,7 +102,7 @@ public final class LocalZipBacktestBridge {
                 if (index >= 0) {
                     String value = cursor.getString(index);
                     if (value != null && !value.trim().isEmpty()) {
-                        return value;
+                        return value.trim();
                     }
                 }
             }
@@ -98,70 +116,115 @@ public final class LocalZipBacktestBridge {
     public String capabilities() {
         JSONObject result = new JSONObject();
         try {
+            List<SelectedFile> snapshot = selectionSnapshot();
             result.put("native_streaming", true);
             result.put("zip", true);
             result.put("nested_zip", true);
             result.put("csv", true);
+            result.put("multiple_files", true);
+            result.put("timeframe_filter", true);
             result.put("hard_candle_limit", JSONObject.NULL);
-            result.put("selected_name", selectedName);
+            result.put("selected_count", snapshot.size());
+            result.put("selected_name", selectionSummary(snapshot));
             result.put("running", running);
         } catch (JSONException ignored) {
         }
         return result.toString();
     }
 
+    /** Kept with the old method name so existing packaged JavaScript remains compatible. */
     @JavascriptInterface
     public void runSelectedFile(String configJson) {
         if (running) {
             emitError("Backtest masih berjalan.");
             return;
         }
-        Uri uri = selectedUri;
-        if (uri == null) {
-            emitError("Pilih file CSV atau ZIP terlebih dahulu.");
+
+        List<SelectedFile> snapshot = selectionSnapshot();
+        if (snapshot.isEmpty()) {
+            emitError("Pilih satu atau beberapa ZIP/CSV terlebih dahulu.");
             return;
         }
 
         running = true;
         cancelled.set(false);
         Thread worker = new Thread(() -> {
-            File copiedFile = null;
+            List<File> temporaryFiles = new ArrayList<>();
             try {
                 BacktestConfig config = BacktestConfig.fromJson(configJson);
-                emitProgress("Menyiapkan file dari penyimpanan/Google Drive…", 0L, 0, selectedName);
-
-                String lower = selectedName.toLowerCase(Locale.ROOT);
                 StreamingBacktestEngine engine = new StreamingBacktestEngine(config);
-                ArchiveContext context = new ArchiveContext(engine);
+                ArchiveContext context = new ArchiveContext(engine, config.timeframe);
 
-                if (lower.endsWith(".zip")) {
-                    copiedFile = copyUriToCache(uri, "selected-archive.zip");
-                    processZip(copiedFile, context, 0);
-                } else {
-                    try (InputStream input = new BufferedInputStream(
-                            activity.getContentResolver().openInputStream(uri), 128 * 1024
-                    )) {
-                        if (input == null) {
-                            throw new IOException("File tidak dapat dibuka.");
+                int archiveNumber = 0;
+                for (SelectedFile selected : snapshot) {
+                    ensureNotCancelled();
+                    archiveNumber += 1;
+                    emitProgress(
+                            "Menyiapkan " + archiveNumber + "/" + snapshot.size() + ": " + selected.name,
+                            engine.candleCount,
+                            context.processedFiles,
+                            selected.name
+                    );
+
+                    String lower = selected.name.toLowerCase(Locale.ROOT);
+                    if (lower.endsWith(".zip")) {
+                        File copied = copyUriToCache(selected.uri, archiveNumber);
+                        temporaryFiles.add(copied);
+                        processZip(copied, context, 0);
+                    } else if (isDirectCandleName(lower)) {
+                        if (!matchesTimeframe(selected.name, config.timeframe)) {
+                            context.ignoredFiles += 1;
+                            continue;
                         }
-                        processCsv(input, selectedName, context);
+                        try (InputStream input = new BufferedInputStream(
+                                activity.getContentResolver().openInputStream(selected.uri), 128 * 1024
+                        )) {
+                            if (input == null) {
+                                throw new IOException("File tidak dapat dibuka: " + selected.name);
+                            }
+                            processCsv(input, selected.name, context);
+                        }
+                    } else {
+                        context.ignoredFiles += 1;
                     }
                 }
 
                 ensureNotCancelled();
+                if (context.processedFiles == 0) {
+                    throw new IOException(
+                            "Tidak ditemukan CSV timeframe " + config.timeframe
+                                    + ". Pilih timeframe yang sesuai dengan nama file di dalam ZIP."
+                    );
+                }
+                if (context.invalidRows > 0 || context.duplicateRows > 0 || context.outOfOrderRows > 0) {
+                    throw new IOException(
+                            "Validasi data gagal: " + context.invalidRows + " baris invalid, "
+                                    + context.duplicateRows + " timestamp duplikat, "
+                                    + context.outOfOrderRows + " timestamp mundur. "
+                                    + "Hasil tidak dihitung agar tidak menyesatkan."
+                    );
+                }
+
                 engine.finish();
                 JSONObject result = engine.toJson();
                 JSONObject run = new JSONObject();
-                run.put("data_source", selectedName);
+                run.put("data_source", selectionSummary(snapshot));
+                run.put("selected_archives", snapshot.size());
                 run.put("candles", engine.candleCount);
                 run.put("files", context.processedFiles);
-                run.put("skipped_rows", context.skippedRows);
+                run.put("ignored_files", context.ignoredFiles);
+                run.put("invalid_rows", context.invalidRows);
+                run.put("duplicate_rows", context.duplicateRows);
+                run.put("out_of_order_rows", context.outOfOrderRows);
+                run.put("skipped_rows", 0);
+                run.put("timeframe", config.timeframe);
                 run.put("first_timestamp", engine.firstTimestamp);
                 run.put("last_timestamp", engine.lastTimestamp);
                 run.put("execution", "native_streaming_next_open");
                 run.put("same_bar_policy", "sl_first");
                 run.put("local_native", true);
                 run.put("archive_order", "natural_filename_order");
+                run.put("validation_ok", true);
                 result.put("run", run);
                 emit("onComplete", result);
             } catch (InterruptedIOException cancelledError) {
@@ -169,9 +232,11 @@ public final class LocalZipBacktestBridge {
             } catch (Exception error) {
                 emitError(error.getMessage() == null ? error.getClass().getSimpleName() : error.getMessage());
             } finally {
-                if (copiedFile != null && copiedFile.exists()) {
-                    //noinspection ResultOfMethodCallIgnored
-                    copiedFile.delete();
+                for (File file : temporaryFiles) {
+                    if (file != null && file.exists()) {
+                        //noinspection ResultOfMethodCallIgnored
+                        file.delete();
+                    }
                 }
                 running = false;
                 cancelled.set(false);
@@ -185,12 +250,12 @@ public final class LocalZipBacktestBridge {
         cancelled.set(true);
     }
 
-    private File copyUriToCache(Uri uri, String fallbackName) throws IOException {
+    private File copyUriToCache(Uri uri, int sequence) throws IOException {
         File cacheDir = new File(activity.getCacheDir(), "backtest-archives");
         if (!cacheDir.exists() && !cacheDir.mkdirs()) {
             throw new IOException("Tidak dapat membuat cache aplikasi.");
         }
-        File target = File.createTempFile("archive-", "-" + fallbackName, cacheDir);
+        File target = File.createTempFile("archive-" + sequence + "-", ".zip", cacheDir);
         try (
                 InputStream input = new BufferedInputStream(
                         activity.getContentResolver().openInputStream(uri), 256 * 1024
@@ -198,7 +263,7 @@ public final class LocalZipBacktestBridge {
                 FileOutputStream output = new FileOutputStream(target)
         ) {
             if (input == null) {
-                throw new IOException("File tidak dapat dibuka dari penyimpanan.");
+                throw new IOException("File ZIP tidak dapat dibuka dari penyimpanan.");
             }
             byte[] buffer = new byte[256 * 1024];
             int read;
@@ -217,21 +282,16 @@ public final class LocalZipBacktestBridge {
         }
 
         try (ZipFile zip = new ZipFile(zipPath)) {
-            List<? extends ZipEntry> entries = Collections.list(zip.entries());
+            List<ZipEntry> entries = Collections.list(zip.entries());
             entries.removeIf(entry -> entry.isDirectory() || isIgnoredEntry(entry.getName()));
             entries.sort((left, right) -> naturalCompare(left.getName(), right.getName()));
 
-            boolean foundData = false;
             for (ZipEntry entry : entries) {
                 ensureNotCancelled();
-                String lower = entry.getName().toLowerCase(Locale.ROOT);
-                if (isCsvName(lower)) {
-                    foundData = true;
-                    try (InputStream input = new BufferedInputStream(zip.getInputStream(entry), 128 * 1024)) {
-                        processCsv(input, entry.getName(), context);
-                    }
-                } else if (lower.endsWith(".zip")) {
-                    foundData = true;
+                String entryName = entry.getName();
+                String lower = entryName.toLowerCase(Locale.ROOT);
+
+                if (lower.endsWith(".zip")) {
                     File nested = File.createTempFile("nested-", ".zip", zipPath.getParentFile());
                     try (
                             InputStream input = new BufferedInputStream(zip.getInputStream(entry), 128 * 1024);
@@ -250,10 +310,21 @@ public final class LocalZipBacktestBridge {
                         //noinspection ResultOfMethodCallIgnored
                         nested.delete();
                     }
+                    continue;
                 }
-            }
-            if (!foundData && depth == 0) {
-                throw new IOException("ZIP tidak berisi CSV/TXT candle atau ZIP bulanan.");
+
+                if (!lower.endsWith(".csv")) {
+                    context.ignoredFiles += 1;
+                    continue;
+                }
+                if (!matchesTimeframe(entryName, context.timeframe)) {
+                    context.ignoredFiles += 1;
+                    continue;
+                }
+
+                try (InputStream input = new BufferedInputStream(zip.getInputStream(entry), 128 * 1024)) {
+                    processCsv(input, entryName, context);
+                }
             }
         }
     }
@@ -265,13 +336,30 @@ public final class LocalZipBacktestBridge {
                 || lower.endsWith("thumbs.db");
     }
 
-    private static boolean isCsvName(String lowerName) {
+    private static boolean isDirectCandleName(String lowerName) {
         return lowerName.endsWith(".csv") || lowerName.endsWith(".txt");
+    }
+
+    private static boolean matchesTimeframe(String fileName, String selectedTimeframe) {
+        String normalized = "_" + fileName.toUpperCase(Locale.ROOT)
+                .replaceAll("[^A-Z0-9]+", "_") + "_";
+        boolean containsKnownTimeframe = false;
+        for (String timeframe : KNOWN_TIMEFRAMES) {
+            String token = "_" + timeframe + "_";
+            if (normalized.contains(token)) {
+                containsKnownTimeframe = true;
+                if (timeframe.equals(selectedTimeframe)) {
+                    return true;
+                }
+            }
+        }
+        // A direct generic OHLC file without a timeframe token is accepted as the
+        // timeframe chosen by the user. Audited archives use explicit M1/M5/etc names.
+        return !containsKnownTimeframe;
     }
 
     private void processCsv(InputStream input, String fileName, ArchiveContext context) throws Exception {
         ensureNotCancelled();
-        context.processedFiles += 1;
         emitProgress(
                 "Membaca " + fileName,
                 context.engine.candleCount,
@@ -288,27 +376,37 @@ public final class LocalZipBacktestBridge {
             } while (headerLine != null && headerLine.trim().isEmpty());
 
             if (headerLine == null) {
-                return;
+                throw new IOException("File kosong: " + fileName);
             }
             headerLine = stripBom(headerLine);
             char delimiter = detectDelimiter(headerLine);
             CsvSchema schema = CsvSchema.fromHeader(splitLine(headerLine, delimiter));
 
+            context.processedFiles += 1;
+            long acceptedInFile = 0L;
             String line;
-            long localRows = 0L;
             while ((line = reader.readLine()) != null) {
                 ensureNotCancelled();
                 if (line.trim().isEmpty()) {
                     continue;
                 }
-                List<String> values = splitLine(line, delimiter);
-                Candle candle = schema.parse(values);
+                Candle candle = schema.parse(splitLine(line, delimiter));
                 if (candle == null) {
-                    context.skippedRows += 1;
+                    context.invalidRows += 1;
                     continue;
                 }
-                context.engine.onCandle(candle);
-                localRows += 1;
+
+                int result = context.engine.onCandle(candle);
+                if (result == StreamingBacktestEngine.DUPLICATE) {
+                    context.duplicateRows += 1;
+                    continue;
+                }
+                if (result == StreamingBacktestEngine.OUT_OF_ORDER) {
+                    context.outOfOrderRows += 1;
+                    continue;
+                }
+                acceptedInFile += 1;
+
                 if (context.engine.candleCount % PROGRESS_EVERY_CANDLES == 0) {
                     emitProgress(
                             "Memproses " + fileName,
@@ -318,8 +416,8 @@ public final class LocalZipBacktestBridge {
                     );
                 }
             }
-            if (localRows == 0L) {
-                throw new IOException("Tidak ada candle valid dalam " + fileName + ".");
+            if (acceptedInFile == 0L) {
+                throw new IOException("Tidak ada candle valid untuk " + context.timeframe + " dalam " + fileName + ".");
             }
         }
     }
@@ -391,15 +489,22 @@ public final class LocalZipBacktestBridge {
                 if (numberA.length() != numberB.length()) {
                     return Integer.compare(numberA.length(), numberB.length());
                 }
-                int cmp = numberA.compareTo(numberB);
-                if (cmp != 0) return cmp;
+                int compare = numberA.compareTo(numberB);
+                if (compare != 0) return compare;
             } else {
                 if (a != b) return Character.compare(a, b);
-                i++;
-                j++;
+                i += 1;
+                j += 1;
             }
         }
         return Integer.compare(left.length(), right.length());
+    }
+
+    private static String selectionSummary(List<SelectedFile> files) {
+        if (files.isEmpty()) return "";
+        if (files.size() == 1) return files.get(0).name;
+        if (files.size() == 2) return files.get(0).name + " + " + files.get(1).name;
+        return files.get(0).name + " + " + (files.size() - 1) + " file lain";
     }
 
     private void ensureNotCancelled() throws InterruptedIOException {
@@ -435,18 +540,34 @@ public final class LocalZipBacktestBridge {
         activity.runOnUiThread(() -> webView.evaluateJavascript(script, null));
     }
 
+    private static final class SelectedFile {
+        final Uri uri;
+        final String name;
+
+        SelectedFile(Uri uri, String name) {
+            this.uri = uri;
+            this.name = name;
+        }
+    }
+
     private static final class ArchiveContext {
         final StreamingBacktestEngine engine;
+        final String timeframe;
         int processedFiles = 0;
-        long skippedRows = 0L;
+        int ignoredFiles = 0;
+        long invalidRows = 0L;
+        long duplicateRows = 0L;
+        long outOfOrderRows = 0L;
 
-        ArchiveContext(StreamingBacktestEngine engine) {
+        ArchiveContext(StreamingBacktestEngine engine, String timeframe) {
             this.engine = engine;
+            this.timeframe = timeframe;
         }
     }
 
     private static final class BacktestConfig {
         final String mode;
+        final String timeframe;
         final int lookback;
         final int atrPeriod;
         final double minPenetrationAtr;
@@ -464,6 +585,7 @@ public final class LocalZipBacktestBridge {
 
         BacktestConfig(
                 String mode,
+                String timeframe,
                 int lookback,
                 int atrPeriod,
                 double minPenetrationAtr,
@@ -480,6 +602,7 @@ public final class LocalZipBacktestBridge {
                 double riskPct
         ) {
             this.mode = mode;
+            this.timeframe = timeframe;
             this.lookback = lookback;
             this.atrPeriod = atrPeriod;
             this.minPenetrationAtr = minPenetrationAtr;
@@ -502,33 +625,41 @@ public final class LocalZipBacktestBridge {
             if (!mode.equals("both") && !mode.equals("sweep_only") && !mode.equals("acceptance_only")) {
                 throw new JSONException("Mode tidak valid.");
             }
-            int lookback = clamp(json.optInt("lookback", 20), 3, 10_000);
-            int atrPeriod = clamp(json.optInt("atr_period", 14), 2, 10_000);
-            int acceptanceCloses = clamp(json.optInt("acceptance_closes", 2), 1, 5);
-            int maxHoldBars = clamp(json.optInt("max_hold_bars", 24), 1, 100_000);
-            double rr = positive(json.optDouble("rr_ratio", 2.0), "RR");
-            double slAtr = positive(json.optDouble("sl_atr", 1.0), "SL ATR");
+
+            String timeframe = json.optString("timeframe", "M5").toUpperCase(Locale.ROOT);
+            boolean timeframeValid = false;
+            for (String candidate : KNOWN_TIMEFRAMES) {
+                if (candidate.equals(timeframe)) {
+                    timeframeValid = true;
+                    break;
+                }
+            }
+            if (!timeframeValid) {
+                throw new JSONException("Timeframe harus M1, M5, M15, H1, H4, atau D1.");
+            }
+
             return new BacktestConfig(
                     mode,
-                    lookback,
-                    atrPeriod,
+                    timeframe,
+                    clamp(json.optInt("lookback", 20), 3, 10_000),
+                    clamp(json.optInt("atr_period", 14), 2, 10_000),
                     Math.max(0.0, json.optDouble("min_penetration_atr", 0.05)),
                     clamp01(json.optDouble("min_wick_ratio", 0.35)),
-                    acceptanceCloses,
+                    clamp(json.optInt("acceptance_closes", 2), 1, 5),
                     clamp01(json.optDouble("min_body_ratio", 0.55)),
                     Math.max(0.5, Math.min(1.0, json.optDouble("close_location", 0.70))),
-                    slAtr,
+                    positive(json.optDouble("sl_atr", 1.0), "SL ATR"),
                     Math.max(0.0, json.optDouble("stop_buffer_atr", 0.10)),
-                    rr,
-                    maxHoldBars,
+                    positive(json.optDouble("rr_ratio", 2.0), "RR"),
+                    clamp(json.optInt("max_hold_bars", 24), 1, 100_000),
                     Math.max(0.0, json.optDouble("cost_per_trade_r", 0.03)),
                     positive(json.optDouble("initial_capital", 10_000.0), "Modal awal"),
                     positive(json.optDouble("risk_per_trade_pct", 1.0), "Risiko") / 100.0
             );
         }
 
-        private static int clamp(int value, int min, int max) {
-            return Math.max(min, Math.min(max, value));
+        private static int clamp(int value, int minimum, int maximum) {
+            return Math.max(minimum, Math.min(maximum, value));
         }
 
         private static double clamp01(double value) {
@@ -572,7 +703,7 @@ public final class LocalZipBacktestBridge {
             int low = find(indexes, "low", "bidlow", "asklow", "l");
             int close = find(indexes, "close", "bidclose", "askclose", "c");
             if (open < 0 || high < 0 || low < 0 || close < 0) {
-                throw new IOException("Header CSV wajib memiliki kolom open, high, low, close.");
+                throw new IOException("Header CSV wajib memiliki open, high, low, close.");
             }
             int timestamp = find(indexes, "timestamp", "datetime", "dateandtime", "gmttime", "datetimeutc");
             int date = find(indexes, "date", "tradingdate");
@@ -586,14 +717,13 @@ public final class LocalZipBacktestBridge {
                 double highValue = parseNumber(value(values, high));
                 double lowValue = parseNumber(value(values, low));
                 double closeValue = parseNumber(value(values, close));
-                if (!allFinite(openValue, highValue, lowValue, closeValue)) {
-                    return null;
-                }
+                if (!allFinite(openValue, highValue, lowValue, closeValue)) return null;
                 if (highValue < Math.max(openValue, closeValue)
                         || lowValue > Math.min(openValue, closeValue)
                         || highValue < lowValue) {
                     return null;
                 }
+
                 String timestampValue;
                 if (timestamp >= 0) {
                     timestampValue = value(values, timestamp);
@@ -606,7 +736,7 @@ public final class LocalZipBacktestBridge {
                 } else {
                     timestampValue = "";
                 }
-                return new Candle(timestampValue, openValue, highValue, lowValue, closeValue);
+                return new Candle(timestampValue.trim(), openValue, highValue, lowValue, closeValue);
             } catch (Exception ignored) {
                 return null;
             }
@@ -614,8 +744,8 @@ public final class LocalZipBacktestBridge {
 
         private static int find(Map<String, Integer> indexes, String... aliases) {
             for (String alias : aliases) {
-                Integer value = indexes.get(alias);
-                if (value != null) return value;
+                Integer index = indexes.get(alias);
+                if (index != null) return index;
             }
             return -1;
         }
@@ -776,8 +906,11 @@ public final class LocalZipBacktestBridge {
     }
 
     private static final class StreamingBacktestEngine {
-        final BacktestConfig config;
+        static final int ACCEPTED = 1;
+        static final int DUPLICATE = 0;
+        static final int OUT_OF_ORDER = -1;
 
+        final BacktestConfig config;
         long candleCount = 0L;
         long currentIndex = -1L;
         String firstTimestamp = "";
@@ -817,7 +950,13 @@ public final class LocalZipBacktestBridge {
             addEquityPoint("", 0L);
         }
 
-        void onCandle(Candle candle) throws JSONException {
+        int onCandle(Candle candle) throws JSONException {
+            if (!candle.timestamp.isEmpty() && !lastTimestamp.isEmpty()) {
+                int compare = candle.timestamp.compareTo(lastTimestamp);
+                if (compare == 0) return DUPLICATE;
+                if (compare < 0) return OUT_OF_ORDER;
+            }
+
             currentIndex += 1L;
             candleCount += 1L;
             if (firstTimestamp.isEmpty()) firstTimestamp = candle.timestamp;
@@ -843,14 +982,12 @@ public final class LocalZipBacktestBridge {
             double priorHigh = highDeque.isEmpty() ? Double.NaN : highDeque.peekFirst().price;
             double priorLow = lowDeque.isEmpty() ? Double.NaN : lowDeque.peekFirst().price;
 
-            double trueRange;
+            double trueRange = candle.high - candle.low;
             if (Double.isFinite(previousClose)) {
                 trueRange = Math.max(
-                        candle.high - candle.low,
+                        trueRange,
                         Math.max(Math.abs(candle.high - previousClose), Math.abs(candle.low - previousClose))
                 );
-            } else {
-                trueRange = candle.high - candle.low;
             }
             trWindow.addLast(trueRange);
             trSum += trueRange;
@@ -874,9 +1011,7 @@ public final class LocalZipBacktestBridge {
 
             if (openTrade == null && pendingSignal == null) {
                 Signal signal = detectSignal(row);
-                if (signal != null) {
-                    pendingSignal = signal;
-                }
+                if (signal != null) pendingSignal = signal;
             }
 
             while (!highDeque.isEmpty() && highDeque.peekLast().price <= candle.high) {
@@ -888,6 +1023,7 @@ public final class LocalZipBacktestBridge {
             }
             lowDeque.addLast(new IndexedPrice(currentIndex, candle.low));
             previousClose = candle.close;
+            return ACCEPTED;
         }
 
         private Signal detectSignal(FeatureRow row) {
@@ -895,7 +1031,6 @@ public final class LocalZipBacktestBridge {
                     || !Double.isFinite(row.priorHigh) || !Double.isFinite(row.priorLow)) {
                 return null;
             }
-
             if (config.mode.equals("both") || config.mode.equals("sweep_only")) {
                 Signal sweep = detectSweep(row);
                 if (sweep != null) return sweep;
@@ -907,18 +1042,18 @@ public final class LocalZipBacktestBridge {
         }
 
         private Signal detectSweep(FeatureRow row) {
-            Candle c = row.candle;
-            double range = c.high - c.low;
+            Candle candle = row.candle;
+            double range = candle.high - candle.low;
             if (range <= 0.0) return null;
-            double lowerWick = (Math.min(c.open, c.close) - c.low) / range;
-            double upperWick = (c.high - Math.max(c.open, c.close)) / range;
+            double lowerWick = (Math.min(candle.open, candle.close) - candle.low) / range;
+            double upperWick = (candle.high - Math.max(candle.open, candle.close)) / range;
             double penetration = config.minPenetrationAtr * row.atr;
 
-            boolean bullish = c.low < row.priorLow - penetration
-                    && c.close > row.priorLow
+            boolean bullish = candle.low < row.priorLow - penetration
+                    && candle.close > row.priorLow
                     && lowerWick >= config.minWickRatio;
-            boolean bearish = c.high > row.priorHigh + penetration
-                    && c.close < row.priorHigh
+            boolean bearish = candle.high > row.priorHigh + penetration
+                    && candle.close < row.priorHigh
                     && upperWick >= config.minWickRatio;
             if (bullish && !bearish) {
                 return new Signal(1, "SWEEP_LOW_RECLAIM", row, row.priorLow);
@@ -948,11 +1083,11 @@ public final class LocalZipBacktestBridge {
                 allBelow &= row.candle.close < first.priorLow - buffer;
             }
 
-            Candle c = last.candle;
-            double range = c.high - c.low;
+            Candle candle = last.candle;
+            double range = candle.high - candle.low;
             if (range <= 0.0) return null;
-            double body = Math.abs(c.close - c.open) / range;
-            double closeLocation = (c.close - c.low) / range;
+            double body = Math.abs(candle.close - candle.open) / range;
+            double closeLocation = (candle.close - candle.low) / range;
 
             boolean bullish = first.previousClose <= first.priorHigh + buffer
                     && allAbove
@@ -1051,6 +1186,7 @@ public final class LocalZipBacktestBridge {
             } else if (netR < 0.0) {
                 losses += -netR;
             }
+
             peakCapital = Math.max(peakCapital, capital);
             if (peakCapital > 0.0) {
                 maxDrawdownPct = Math.max(maxDrawdownPct, (peakCapital - capital) / peakCapital * 100.0);
