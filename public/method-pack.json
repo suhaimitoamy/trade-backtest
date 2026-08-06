@@ -1,0 +1,127 @@
+{
+  "schema_version": 1,
+  "pack_version": 4,
+  "updated_at": "2026-08-06T07:30:00Z",
+  "channel": "preview",
+  "notes": "ICT, swing structure, FVG, order block, breaker, OTE/Fibonacci, session, RBS/SBR, dan audit EMA-isolation.",
+  "templates": [
+    {
+      "id": "blank",
+      "name": "Metode kosong",
+      "description": "Mulai dari nol tanpa ketergantungan indikator tersembunyi.",
+      "config": {"side":"both","buy_logic":"all","sell_logic":"all","buy_conditions":[],"sell_conditions":[]}
+    },
+    {
+      "id": "rbs_sbr_structure",
+      "name": "RBS/SBR + swing structure",
+      "description": "Retest level setelah breakout, dikonfirmasi struktur swing. Tidak memakai EMA.",
+      "config": {
+        "side":"both","buy_logic":"all","sell_logic":"all",
+        "buy_conditions":[
+          {"type":"RBS_RETEST","value":0.15,"period":12},
+          {"type":"SWING_HH_HL"},
+          {"type":"CANDLE_BULL"}
+        ],
+        "sell_conditions":[
+          {"type":"SBR_RETEST","value":0.15,"period":12},
+          {"type":"SWING_LH_LL"},
+          {"type":"CANDLE_BEAR"}
+        ],
+        "sl_mode":"swing_level","sl_atr":1.0,"rr_ratio":2.0,"cooldown_bars":3
+      }
+    },
+    {
+      "id": "ict_sweep_mss_fvg",
+      "name": "ICT: liquidity sweep + MSS + FVG",
+      "description": "Sweep liquidity, perubahan struktur, lalu retest fair value gap. Definisi numerik dan causal.",
+      "config": {
+        "side":"both","buy_logic":"all","sell_logic":"all",
+        "buy_conditions":[
+          {"type":"LIQUIDITY_SWEEP_MSS_BUY"},
+          {"type":"FVG_BULL_RETEST"},
+          {"type":"DISCOUNT_ZONE","value":0.55}
+        ],
+        "sell_conditions":[
+          {"type":"LIQUIDITY_SWEEP_MSS_SELL"},
+          {"type":"FVG_BEAR_RETEST"},
+          {"type":"PREMIUM_ZONE","value":0.45}
+        ],
+        "sl_mode":"swing_level","sl_atr":1.0,"rr_ratio":2.0,"structure_lookback":40,"fvg_lookback":20
+      }
+    },
+    {
+      "id": "ict_ote_order_block",
+      "name": "ICT: OTE + order block + BOS",
+      "description": "Retracement 62–79% dari dealing swing ke order block setelah break of structure.",
+      "config": {
+        "side":"both","buy_logic":"all","sell_logic":"all",
+        "buy_conditions":[
+          {"type":"BOS_UP"},
+          {"type":"OTE_BUY_ZONE","value":0.62,"value2":0.79},
+          {"type":"OB_BULL_RETEST"}
+        ],
+        "sell_conditions":[
+          {"type":"BOS_DOWN"},
+          {"type":"OTE_SELL_ZONE","value":0.62,"value2":0.79},
+          {"type":"OB_BEAR_RETEST"}
+        ],
+        "sl_mode":"order_block","sl_atr":1.0,"rr_ratio":2.5,"ob_lookback":30
+      }
+    },
+    {
+      "id": "ict_breaker",
+      "name": "ICT: breaker retest",
+      "description": "Order block yang gagal dan berbalik fungsi menjadi breaker.",
+      "config": {
+        "side":"both","buy_logic":"all","sell_logic":"all",
+        "buy_conditions":[{"type":"BREAKER_BULL_RETEST"},{"type":"MSS_UP"},{"type":"CANDLE_BULL"}],
+        "sell_conditions":[{"type":"BREAKER_BEAR_RETEST"},{"type":"MSS_DOWN"},{"type":"CANDLE_BEAR"}],
+        "sl_mode":"signal_extreme","sl_atr":1.0,"rr_ratio":2.0
+      }
+    },
+    {
+      "id": "fvg_bos_continuation",
+      "name": "BOS + FVG continuation",
+      "description": "Displacement memecah swing lalu harga kembali ke FVG searah struktur.",
+      "config": {
+        "side":"both","buy_logic":"all","sell_logic":"all",
+        "buy_conditions":[{"type":"BOS_UP"},{"type":"FVG_BULL_RETEST"},{"type":"DISPLACEMENT_BULL","value":0.8,"value2":0.65}],
+        "sell_conditions":[{"type":"BOS_DOWN"},{"type":"FVG_BEAR_RETEST"},{"type":"DISPLACEMENT_BEAR","value":0.8,"value2":0.65}],
+        "sl_mode":"swing_level","sl_atr":1.0,"rr_ratio":2.0
+      }
+    },
+    {
+      "id": "market_structure_only",
+      "name": "Market structure sederhana",
+      "description": "HH-HL/LH-LL berbasis swing pivot dan candle konfirmasi, tanpa EMA.",
+      "config": {
+        "side":"both","buy_logic":"all","sell_logic":"all",
+        "buy_conditions":[{"type":"SWING_HH_HL"},{"type":"CLOSE_ABOVE_PREV_HIGH"},{"type":"CANDLE_BULL"}],
+        "sell_conditions":[{"type":"SWING_LH_LL"},{"type":"CLOSE_BELOW_PREV_LOW"},{"type":"CANDLE_BEAR"}],
+        "sl_mode":"swing_level","sl_atr":1.0,"rr_ratio":2.0
+      }
+    },
+    {
+      "id": "london_sweep",
+      "name": "London liquidity sweep",
+      "description": "Sweep rolling liquidity pada London killzone, tanpa EMA.",
+      "config": {
+        "side":"both","buy_logic":"all","sell_logic":"all",
+        "buy_conditions":[{"type":"KILLZONE_LONDON"},{"type":"SWEEP_LOW","value":0.05},{"type":"LOWER_WICK_MIN","value":0.35}],
+        "sell_conditions":[{"type":"KILLZONE_LONDON"},{"type":"SWEEP_HIGH","value":0.05},{"type":"UPPER_WICK_MIN","value":0.35}],
+        "sl_mode":"signal_extreme","sl_atr":1.0,"rr_ratio":2.0
+      }
+    },
+    {
+      "id": "ema_optional",
+      "name": "EMA pullback (indikator aktif)",
+      "description": "Template pembanding yang sengaja memakai EMA. Audit akan menandai EMA sebagai fitur aktif.",
+      "config": {
+        "side":"both","buy_logic":"all","sell_logic":"all",
+        "buy_conditions":[{"type":"EMA_FAST_ABOVE"},{"type":"EMA_FAST_RISING"},{"type":"CANDLE_BULL"}],
+        "sell_conditions":[{"type":"EMA_FAST_BELOW"},{"type":"EMA_FAST_FALLING"},{"type":"CANDLE_BEAR"}],
+        "sl_mode":"signal_extreme","sl_atr":1.0,"rr_ratio":2.0
+      }
+    }
+  ]
+}

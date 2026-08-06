@@ -1,319 +1,116 @@
 <!doctype html>
 <html lang="id">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <meta name="theme-color" content="#080b12">
-  <title>Trading Method Lab</title>
-  <style>
-    :root{color-scheme:dark;--bg:#080b12;--panel:#111722;--panel2:#171f2d;--line:#293449;--text:#f4f7fb;--muted:#93a0b5;--accent:#f0b84b;--green:#43d39e;--red:#ff7373;--blue:#6aa8ff}
-    *{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at top right,rgba(240,184,75,.12),transparent 34rem),var(--bg);color:var(--text);font-family:Inter,system-ui,sans-serif}
-    main{width:min(1240px,calc(100% - 20px));margin:auto;padding:20px 0 60px}h1,h2,h3,h4,p{margin-top:0}p{color:var(--muted);line-height:1.5}.grid{display:grid;grid-template-columns:minmax(320px,440px) 1fr;gap:14px;align-items:start}
-    .panel,.metric,.table-panel,.rule-card{border:1px solid var(--line);border-radius:16px;background:linear-gradient(145deg,rgba(23,31,45,.97),rgba(12,16,24,.98));box-shadow:0 18px 50px rgba(0,0,0,.20)}.panel,.table-panel{padding:16px}.stack{display:grid;gap:12px}.fields{display:grid;grid-template-columns:1fr 1fr;gap:10px}.full{grid-column:1/-1}
-    label{display:grid;gap:6px;color:var(--muted);font-size:12px;font-weight:700}input,select{width:100%;min-height:43px;border:1px solid var(--line);border-radius:10px;background:#0c111b;color:var(--text);padding:0 10px;font:inherit}input[type=file]{padding:10px}input[type=checkbox]{width:auto;min-height:auto;accent-color:var(--accent)}
-    button{min-height:44px;border:0;border-radius:11px;background:var(--accent);color:#181207;font-weight:900;font:inherit;padding:0 14px;cursor:pointer}button.secondary{background:transparent;color:var(--text);border:1px solid var(--line)}button.danger{background:transparent;color:var(--red);border:1px solid rgba(255,115,115,.45)}button.small{min-height:38px;font-size:12px}button:disabled{opacity:.55;cursor:wait}.button-row{display:flex;gap:8px;flex-wrap:wrap}.button-row button{flex:1}
-    .note{font-size:12px}.status{border:1px solid var(--line);border-radius:12px;padding:12px 14px;color:var(--muted);margin-bottom:10px}.status.success{color:var(--green);border-color:rgba(67,211,158,.4)}.status.error{color:var(--red);border-color:rgba(255,115,115,.4)}.progress{height:8px;border:1px solid var(--line);border-radius:999px;overflow:hidden;display:none;margin-bottom:14px}.progress span{display:block;width:35%;height:100%;background:var(--accent);animation:move 1.1s linear infinite}@keyframes move{from{transform:translateX(-120%)}to{transform:translateX(340%)}}
-    .metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.metric{padding:14px}.metric .name{color:var(--muted);font-size:12px}.metric .value{font-size:clamp(20px,3vw,29px);font-weight:900;margin-top:6px}.chart{margin-top:12px}.chart img{width:100%;display:none;background:white;border-radius:10px}.chart canvas{width:100%;height:280px;display:none;background:#0c111b;border-radius:10px}
-    .breakdown{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}.table-wrap{overflow:auto;max-height:420px}table{width:100%;border-collapse:collapse;font-size:12px}th,td{padding:9px 8px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}th:first-child,td:first-child,th:nth-child(2),td:nth-child(2){text-align:left}th{position:sticky;top:0;background:var(--panel2);color:var(--muted)}.positive{color:var(--green)}.negative{color:var(--red)}
-    .badge{display:inline-block;border:1px solid var(--line);border-radius:999px;padding:3px 8px;font-size:11px;color:var(--muted);margin-left:6px}.tabs{display:grid;grid-template-columns:1fr 1fr;gap:8px}.tab{background:#0c111b;color:var(--muted);border:1px solid var(--line)}.tab.active{background:var(--accent);color:#181207;border-color:transparent}.hidden{display:none!important}
-    .builder-box{border:1px solid var(--line);border-radius:14px;padding:12px;background:rgba(8,11,18,.45)}.builder-head{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:10px}.builder-head h3{font-size:15px;margin:0}.rule-list{display:grid;gap:8px}.rule-card{padding:10px;border-radius:12px;display:grid;grid-template-columns:minmax(150px,1.7fr) minmax(74px,.7fr) minmax(74px,.7fr) 38px;gap:7px;align-items:end}.rule-card select,.rule-card input{min-height:39px;font-size:12px}.rule-card .remove{width:38px;padding:0;background:transparent;color:var(--red);border:1px solid rgba(255,115,115,.4)}.condition-help{font-size:11px;color:var(--muted);margin-top:7px;min-height:16px}.inline-check{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:12px;font-weight:700}
-    .definition{margin-top:12px}.definition article{padding:9px 0;border-top:1px solid var(--line);color:var(--muted);font-size:13px;line-height:1.45}.definition strong{color:var(--accent)}.callout{border-left:3px solid var(--blue);padding:9px 11px;background:rgba(106,168,255,.08);color:var(--muted);font-size:12px;line-height:1.5;border-radius:8px}
-    @media(max-width:960px){.grid{grid-template-columns:1fr}}@media(max-width:680px){.metrics{grid-template-columns:repeat(2,1fr)}.breakdown{grid-template-columns:1fr}.rule-card{grid-template-columns:1fr 1fr 1fr 38px}}@media(max-width:430px){main{width:calc(100% - 14px)}.fields{grid-template-columns:1fr}.full{grid-column:auto}.rule-card{grid-template-columns:1fr 1fr}.rule-card .condition-select{grid-column:1/-1}.rule-card .remove{width:100%}}
-  </style>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#080b12">
+<title>Trading Method Lab</title>
+<style>
+:root{color-scheme:dark;--bg:#080b12;--panel:#111722;--panel2:#171f2d;--line:#293449;--text:#f4f7fb;--muted:#96a2b6;--gold:#f0b84b;--green:#43d39e;--red:#ff7373;--blue:#66a7ff}*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at top right,rgba(240,184,75,.12),transparent 38rem),var(--bg);color:var(--text);font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif}main{width:min(1240px,calc(100% - 20px));margin:auto;padding:20px 0 70px}h1,h2,h3,p{margin-top:0}h1{font-size:clamp(27px,5vw,43px);margin-bottom:6px}p{color:var(--muted);line-height:1.5}.layout{display:grid;grid-template-columns:minmax(340px,430px) 1fr;gap:14px;align-items:start}.panel,.metric{border:1px solid var(--line);border-radius:16px;background:linear-gradient(145deg,rgba(23,31,45,.97),rgba(12,16,24,.98));box-shadow:0 18px 45px rgba(0,0,0,.2)}.panel{padding:16px;margin-bottom:12px}.panel h2{font-size:18px;margin-bottom:13px}.panel h3{font-size:15px}.fields{display:grid;grid-template-columns:1fr 1fr;gap:10px}.full{grid-column:1/-1}label{display:grid;gap:5px;color:var(--muted);font-size:12px;font-weight:700}input,select{width:100%;min-height:42px;border:1px solid var(--line);border-radius:10px;background:#0c111b;color:var(--text);padding:0 10px;font:inherit}input[type=file]{padding:9px}.row{display:flex;gap:8px;align-items:center}.row>*{flex:1}button{min-height:44px;border:0;border-radius:11px;background:var(--gold);color:#181207;font:inherit;font-weight:900;padding:10px 13px;cursor:pointer}button.secondary{background:transparent;color:var(--text);border:1px solid var(--line)}button.danger{background:rgba(255,115,115,.12);color:var(--red);border:1px solid rgba(255,115,115,.35)}button.small{min-height:34px;padding:6px 9px;font-size:12px}button:disabled{opacity:.52;cursor:wait}.tabs{display:flex;gap:7px;overflow:auto;margin-bottom:12px}.tab{white-space:nowrap;background:transparent;color:var(--muted);border:1px solid var(--line)}.tab.active{background:var(--gold);color:#181207}.condition-list{display:grid;gap:8px}.condition{display:grid;grid-template-columns:1fr 82px 82px 34px;gap:6px;padding:9px;border:1px solid var(--line);border-radius:11px;background:#0c111b}.condition select,.condition input{min-height:36px;font-size:12px}.condition .remove{min-height:36px;padding:0;background:transparent;color:var(--red);border:1px solid rgba(255,115,115,.35)}.side-head{display:flex;justify-content:space-between;align-items:center;gap:8px;margin:12px 0 8px}.badge{display:inline-block;padding:3px 8px;border-radius:999px;border:1px solid var(--line);font-size:11px;color:var(--muted)}.badge.good{color:var(--green);border-color:rgba(67,211,158,.4)}.badge.warn{color:var(--gold);border-color:rgba(240,184,75,.4)}.status{padding:12px 14px;border:1px solid var(--line);border-radius:12px;color:var(--muted);margin-bottom:10px}.status.success{color:var(--green);border-color:rgba(67,211,158,.38)}.status.error{color:var(--red);border-color:rgba(255,115,115,.4)}.progress{display:none;height:8px;overflow:hidden;border:1px solid var(--line);border-radius:999px;margin-bottom:12px}.progress span{display:block;width:34%;height:100%;background:var(--gold);animation:move 1.1s linear infinite}@keyframes move{from{transform:translateX(-120%)}to{transform:translateX(350%)}}.metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px}.metric{padding:13px}.metric .name{font-size:11px;color:var(--muted);margin-bottom:7px}.metric .value{font-size:clamp(20px,3vw,29px);font-weight:900}.positive{color:var(--green)}.negative{color:var(--red)}.audit{display:grid;gap:8px}.audit-box{padding:11px;border:1px solid var(--line);border-radius:11px;background:#0c111b}.audit-box strong{color:var(--gold)}.warning{color:var(--gold);font-size:12px;margin:4px 0}.ok{color:var(--green)}.table-wrap{overflow:auto;max-height:390px}table{width:100%;border-collapse:collapse;font-size:12px}th,td{padding:9px 8px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}th:first-child,td:first-child{text-align:left}th{position:sticky;top:0;background:var(--panel2);color:var(--muted)}canvas{width:100%;height:280px;background:#0c111b;border-radius:10px}.note{font-size:12px;color:var(--muted)}details{border-top:1px solid var(--line);padding-top:10px;margin-top:10px}summary{cursor:pointer;color:var(--gold);font-weight:800}.update-card{display:grid;gap:8px}.hidden{display:none!important}@media(max-width:940px){.layout{grid-template-columns:1fr}}@media(max-width:700px){.metrics{grid-template-columns:repeat(2,1fr)}.condition{grid-template-columns:1fr 70px 70px 34px}}@media(max-width:430px){main{width:calc(100% - 12px)}.fields{grid-template-columns:1fr}.full{grid-column:auto}.condition{grid-template-columns:1fr 1fr 1fr 34px}}
+</style>
 </head>
-<body>
-<main>
-  <header>
-    <h1>Trading Method Lab</h1>
-    <p>Uji preset Sweep/Acceptance atau susun metode sendiri dari blok kondisi. Semua signal memakai candle yang sudah close dan entry pada open candle berikutnya.</p>
-  </header>
+<body><main>
+<header><h1>Trading Method Lab <span class="badge">v2.4 audited</span></h1><p>Susun metode sendiri, termasuk ICT, market structure, RBS/SBR, Fibonacci, FVG, order block, breaker, sesi, price action, dan EMA opsional. Engine hanya mengaktifkan fitur yang benar-benar dipilih.</p></header>
+<div class="layout">
+<aside>
+<section class="panel">
+<h2>Data</h2><div class="fields">
+<label class="full">Arsip candle CSV/ZIP<input id="dataFile" type="file" multiple accept=".zip,.csv,.txt,application/zip,text/csv,text/plain"></label>
+<label>Timeframe<select id="timeframe"><option>M1</option><option selected>M5</option><option>M15</option><option>H1</option><option>H4</option><option>D1</option></select></label>
+<label>Nama metode<input id="methodName" value="Metode Saya"></label>
+</div><p class="note">Pilih beberapa ZIP tahunan sekaligus. Hanya timeframe yang dipilih yang diproses; timeframe lain diabaikan.</p>
+</section>
 
-  <div class="grid">
-    <aside class="stack">
-      <section class="panel">
-        <h2>Data <span id="runtimeBadge" class="badge">Web</span></h2>
-        <div class="fields">
-          <label class="full">Pilih satu atau banyak CSV/ZIP
-            <input id="dataFile" type="file" multiple accept=".csv,.txt,.zip,text/csv,text/plain,application/zip,application/x-zip-compressed">
-          </label>
-          <label>Timeframe
-            <select id="timeframe"><option>M1</option><option selected>M5</option><option>M15</option><option>H1</option><option>H4</option><option>D1</option></select>
-          </label>
-          <label>Jenis metode
-            <select id="strategyType">
-              <option value="custom_builder" selected>Buat metode sendiri</option>
-              <option value="preset">Preset Sweep + Acceptance</option>
-            </select>
-          </label>
-          <label>Lookback rolling level
-            <input id="lookback" type="number" min="3" max="10000" value="20">
-          </label>
-          <label>ATR period
-            <input id="atrPeriod" type="number" min="2" max="10000" value="14">
-          </label>
-        </div>
-        <p class="note">Pilih arsip tahunan langsung. APK membuka ZIP tahunan, ZIP bulanan, lalu hanya membaca timeframe terpilih.</p>
-      </section>
+<section class="panel">
+<h2>Pustaka metode <span id="packBadge" class="badge">bundled</span></h2>
+<div class="row"><select id="templateSelect"></select><button id="applyTemplate" class="small">Pakai</button></div>
+<p id="templateDescription" class="note"></p>
+<div class="row"><button id="updatePack" class="secondary small">Perbarui pustaka</button><button id="saveMethod" class="secondary small">Simpan metode</button><button id="loadMethod" class="secondary small">Muat</button></div>
+</section>
 
-      <section id="presetPanel" class="panel hidden">
-        <h2>Preset Sweep / Acceptance</h2>
-        <div class="fields">
-          <label>Mode
-            <select id="mode"><option value="both">Sweep + Acceptance</option><option value="sweep_only">Sweep saja</option><option value="acceptance_only">Acceptance saja</option></select>
-          </label>
-          <label>Minimum break ATR<input id="penetration" type="number" min="0" max="2" step="0.01" value="0.05"></label>
-          <label>Minimum wick ratio<input id="wickRatio" type="number" min="0" max="1" step="0.05" value="0.35"></label>
-          <label>Acceptance closes<input id="acceptanceCloses" type="number" min="1" max="5" value="2"></label>
-          <label>Minimum body ratio<input id="bodyRatio" type="number" min="0" max="1" step="0.05" value="0.55"></label>
-          <label>Close location<input id="closeLocation" type="number" min="0.5" max="1" step="0.05" value="0.70"></label>
-        </div>
-      </section>
+<section class="panel">
+<h2>Method Builder</h2>
+<div class="fields">
+<label>Arah<select id="side"><option value="both">BUY + SELL</option><option value="buy_only">BUY saja</option><option value="sell_only">SELL saja</option></select></label>
+<label>Rolling lookback<input id="lookback" type="number" min="3" value="20"></label>
+<label>ATR period<input id="atrPeriod" type="number" min="2" value="14"></label>
+<label>Swing kiri/kanan<div class="row"><input id="swingLeft" type="number" min="1" max="20" value="3"><input id="swingRight" type="number" min="1" max="20" value="3"></div></label>
+<label>Structure lookback<input id="structureLookback" type="number" min="5" value="50"></label>
+<label>FVG lookback<input id="fvgLookback" type="number" min="3" value="20"></label>
+<label>OB/breaker lookback<input id="obLookback" type="number" min="3" value="30"></label>
+</div>
+<div id="emaFields" class="fields" style="margin-top:10px"><label>EMA cepat<input id="emaFast" type="number" min="1" value="9"></label><label>EMA lambat<input id="emaSlow" type="number" min="2" value="21"></label></div>
+<p id="emaState" class="note"></p>
 
-      <section id="builderPanel" class="panel">
-        <h2>Method Builder</h2>
-        <div class="fields">
-          <label class="full">Nama metode<input id="methodName" maxlength="40" value="RBS SBR Trend"></label>
-          <label>Template awal
-            <select id="builderPreset">
-              <option value="rbs_trend">RBS/SBR + trend</option>
-              <option value="sweep_rejection">Sweep + rejection</option>
-              <option value="breakout_momentum">Breakout + momentum</option>
-              <option value="empty">Kosong</option>
-            </select>
-          </label>
-          <label>Arah
-            <select id="directionMode"><option value="both">BUY + SELL</option><option value="long_only">BUY saja</option><option value="short_only">SELL saja</option></select>
-          </label>
-          <label>EMA cepat<input id="emaFast" type="number" min="2" max="10000" value="9"></label>
-          <label>EMA lambat<input id="emaSlow" type="number" min="2" max="10000" value="21"></label>
-        </div>
-        <div class="button-row" style="margin-top:10px">
-          <button id="applyPreset" class="secondary small" type="button">Terapkan template</button>
-          <button id="mirrorRules" class="secondary small" type="button">Cermin BUY → SELL</button>
-        </div>
+<div class="side-head"><h3>BUY</h3><select id="buyLogic" style="max-width:150px"><option value="all">Semua / AND</option><option value="any">Salah satu / OR</option></select></div>
+<div id="buyConditions" class="condition-list"></div><div class="row"><button id="addBuy" class="secondary small">+ Kondisi BUY</button><button id="mirrorSell" class="secondary small">Cermin BUY → SELL</button></div>
+<div class="side-head"><h3>SELL</h3><select id="sellLogic" style="max-width:150px"><option value="all">Semua / AND</option><option value="any">Salah satu / OR</option></select></div>
+<div id="sellConditions" class="condition-list"></div><button id="addSell" class="secondary small">+ Kondisi SELL</button>
+</section>
 
-        <div class="builder-box" style="margin-top:12px">
-          <div class="builder-head">
-            <h3>Kondisi BUY</h3>
-            <select id="buyLogic" style="width:auto;min-height:38px"><option value="all">Semua wajib</option><option value="any">Salah satu</option></select>
-          </div>
-          <div id="buyRules" class="rule-list"></div>
-          <button id="addBuyRule" class="secondary small" type="button" style="margin-top:9px;width:100%">+ Tambah kondisi BUY</button>
-        </div>
+<section class="panel"><h2>Eksekusi</h2><div class="fields">
+<label>Stop Loss<select id="slMode"><option value="signal_extreme">Extreme candle sinyal</option><option value="atr">ATR murni</option><option value="rolling_level">Rolling level</option><option value="swing_level">Swing level</option><option value="order_block">Order block</option></select></label>
+<label>SL minimum ATR<input id="slAtr" type="number" step="0.1" min="0.1" value="1"></label>
+<label>RR target<input id="rrRatio" type="number" step="0.25" min="0.25" value="2"></label>
+<label>Max hold candle<input id="maxHold" type="number" min="1" value="24"></label>
+<label>Cooldown candle<input id="cooldown" type="number" min="0" value="0"></label>
+<label>Biaya/trade (R)<input id="costR" type="number" step="0.01" min="0" value="0.03"></label>
+</div></section>
 
-        <div class="builder-box" style="margin-top:12px">
-          <div class="builder-head">
-            <h3>Kondisi SELL</h3>
-            <select id="sellLogic" style="width:auto;min-height:38px"><option value="all">Semua wajib</option><option value="any">Salah satu</option></select>
-          </div>
-          <div id="sellRules" class="rule-list"></div>
-          <button id="addSellRule" class="secondary small" type="button" style="margin-top:9px;width:100%">+ Tambah kondisi SELL</button>
-        </div>
+<section class="panel"><h2>Audit metode</h2><div id="preAudit" class="audit"><div class="audit-box">Audit akan memeriksa ketergantungan EMA, fitur aktif, kondisi duplikat, dan aturan berlawanan.</div></div><button id="auditButton" class="secondary">Audit sekarang</button></section>
 
-        <div class="fields" style="margin-top:12px">
-          <label>Metode Stop Loss
-            <select id="slMode"><option value="signal_extreme">Extreme candle signal</option><option value="rolling_level">Rolling high/low</option><option value="atr">ATR murni</option></select>
-          </label>
-          <label>Cooldown candle<input id="cooldownBars" type="number" min="0" max="100000" value="0"></label>
-          <label class="full">Metode tersimpan
-            <select id="savedMethods"><option value="">— Pilih metode —</option></select>
-          </label>
-        </div>
-        <div class="button-row" style="margin-top:9px">
-          <button id="saveMethod" class="secondary small" type="button">Simpan</button>
-          <button id="loadMethod" class="secondary small" type="button">Muat</button>
-          <button id="deleteMethod" class="danger small" type="button">Hapus</button>
-        </div>
-        <p class="note">Maksimal 12 kondisi per arah. “Semua wajib” berarti AND; “Salah satu” berarti OR. Rule disimpan lokal di HP, bukan ke GitHub.</p>
-      </section>
+<button id="runButton">Jalankan Backtest</button><button id="cancelButton" class="danger" disabled style="width:100%;margin-top:8px">Batalkan</button>
 
-      <section class="panel">
-        <h2>Eksekusi dan risiko</h2>
-        <div class="fields">
-          <label>SL minimum ATR<input id="slAtr" type="number" min="0.1" max="20" step="0.1" value="1.0"></label>
-          <label>RR target<input id="rrRatio" type="number" min="0.25" max="20" step="0.25" value="2.0"></label>
-          <label>Max hold candle<input id="maxHold" type="number" min="1" max="100000" value="24"></label>
-          <label>Biaya per trade R<input id="costR" type="number" min="0" max="1" step="0.01" value="0.03"></label>
-        </div>
-        <div class="button-row" style="margin-top:12px">
-          <button id="runButton" type="button">Jalankan Backtest</button>
-          <button id="cancelButton" class="secondary" type="button" disabled>Batalkan</button>
-        </div>
-        <div class="callout" style="margin-top:12px">Builder tidak mencari rule terbaik secara otomatis. Kamu menentukan logikanya, lalu aplikasi menguji aturan yang sama secara konsisten pada seluruh data.</div>
-      </section>
+<section class="panel" style="margin-top:12px"><h2>Pusat pembaruan</h2><div class="update-card"><div id="updateStatus" class="note">Pustaka metode dapat diperbarui tanpa APK. Primitive/engine baru memakai pembaruan aplikasi.</div><div class="row"><button id="checkUpdate" class="secondary small">Cek aplikasi</button><button id="installUpdate" class="small" disabled>Instal update</button><button id="cancelUpdate" class="danger small" disabled>Batalkan</button></div></div></section>
+</aside>
 
-      <section class="panel definition">
-        <h2>Blok penting</h2>
-        <article><strong>RBS retest:</strong> candle sebelumnya close di atas rolling high, lalu candle sekarang retest level dan tetap close di atas.</article>
-        <article><strong>SBR retest:</strong> kebalikan RBS untuk SELL.</article>
-        <article><strong>Breakout:</strong> close melewati rolling high/low dengan buffer ATR.</article>
-        <article><strong>Sweep reclaim:</strong> wick melewati rolling level tetapi close kembali ke dalam.</article>
-        <article><strong>Eksekusi:</strong> next-open, satu posisi aktif, SL-first bila SL dan TP tersentuh dalam candle yang sama.</article>
-      </section>
-    </aside>
-
-    <section>
-      <div id="status" class="status">Pilih arsip dan susun metode.</div>
-      <div id="progress" class="progress"><span></span></div>
-      <div class="metrics">
-        <article class="metric"><div class="name">Total Trade</div><div id="totalTrades" class="value">—</div></article>
-        <article class="metric"><div class="name">Win Rate</div><div id="winrate" class="value">—</div></article>
-        <article class="metric"><div class="name">Profit Factor</div><div id="profitFactor" class="value">—</div></article>
-        <article class="metric"><div class="name">Expectancy</div><div id="expectancy" class="value">—</div></article>
-        <article class="metric"><div class="name">Total R</div><div id="totalR" class="value">—</div></article>
-        <article class="metric"><div class="name">Max DD R</div><div id="maxDdR" class="value">—</div></article>
-        <article class="metric"><div class="name">Total PnL</div><div id="totalPnl" class="value">—</div></article>
-        <article class="metric"><div class="name">Candle</div><div id="candles" class="value">—</div></article>
-      </div>
-
-      <section class="panel chart"><h2>Equity Curve</h2><p id="chartEmpty">Grafik akan muncul setelah backtest selesai.</p><img id="chart" alt="Equity curve"><canvas id="equityCanvas"></canvas></section>
-      <div class="breakdown">
-        <section class="table-panel"><h3>Hasil per setup</h3><div class="table-wrap"><table><thead><tr><th>Setup</th><th>Trade</th><th>WR</th><th>Total R</th><th>PF</th></tr></thead><tbody id="setupRows"></tbody></table></div></section>
-        <section class="table-panel"><h3>Hasil per arah</h3><div class="table-wrap"><table><thead><tr><th>Arah</th><th>Trade</th><th>WR</th><th>Total R</th><th>PF</th></tr></thead><tbody id="directionRows"></tbody></table></div></section>
-      </div>
-      <section class="table-panel" style="margin-top:12px"><h3>100 trade terakhir</h3><div class="table-wrap"><table><thead><tr><th>Entry</th><th>Setup</th><th>Arah</th><th>Exit</th><th>Bars</th><th>R</th></tr></thead><tbody id="tradeRows"></tbody></table></div></section>
-    </section>
-  </div>
-</main>
+<section>
+<div id="status" class="status">Pilih data, susun metode, lalu audit.</div><div id="progress" class="progress"><span></span></div>
+<div class="metrics">
+<article class="metric"><div class="name">Total Trade</div><div id="totalTrades" class="value">—</div></article><article class="metric"><div class="name">Win Rate</div><div id="winrate" class="value">—</div></article><article class="metric"><div class="name">Profit Factor</div><div id="profitFactor" class="value">—</div></article><article class="metric"><div class="name">Expectancy</div><div id="expectancy" class="value">—</div></article><article class="metric"><div class="name">Total R</div><div id="totalR" class="value">—</div></article><article class="metric"><div class="name">Max DD (R)</div><div id="maxDd" class="value">—</div></article><article class="metric"><div class="name">Total PnL</div><div id="totalPnl" class="value">—</div></article><article class="metric"><div class="name">Candle</div><div id="candles" class="value">—</div></article>
+</div>
+<section class="panel" style="margin-top:12px"><h2>Equity Curve</h2><canvas id="equity"></canvas></section>
+<section class="panel"><h2>Audit hasil</h2><div id="resultAudit" class="audit"><div class="audit-box">Belum ada hasil.</div></div></section>
+<section class="panel"><h2>Hasil per arah</h2><div class="table-wrap"><table><thead><tr><th>Arah</th><th>Trade</th><th>WR</th><th>Total R</th><th>PF</th></tr></thead><tbody id="directionRows"></tbody></table></div></section>
+<section class="panel"><h2>100 trade terakhir</h2><div class="table-wrap"><table><thead><tr><th>Entry</th><th>Arah</th><th>Exit</th><th>Bars</th><th>R</th><th>Kondisi</th></tr></thead><tbody id="tradeRows"></tbody></table></div></section>
+</section>
+</div></main>
 <script>
-const $=id=>document.getElementById(id);
-const nativePreset=typeof window.AndroidBacktest!=='undefined'&&typeof window.AndroidBacktest.runSelectedFile==='function';
-const nativeBuilder=typeof window.AndroidMethodBuilder!=='undefined'&&typeof window.AndroidMethodBuilder.runSelectedFile==='function';
-$('runtimeBadge').textContent=nativeBuilder?'APK lokal':'Web API';
-
-const CONDITION_DEFS={
- BULLISH_CANDLE:{label:'Candle bullish',help:'Close lebih tinggi dari open.'},
- BEARISH_CANDLE:{label:'Candle bearish',help:'Close lebih rendah dari open.'},
- BODY_RATIO_MIN:{label:'Body ratio minimum',value:true,placeholder:'0.55',help:'Ukuran body ÷ range candle minimal nilai ini.'},
- BODY_RATIO_MAX:{label:'Body ratio maksimum',value:true,placeholder:'0.40',help:'Ukuran body ÷ range candle maksimal nilai ini.'},
- LOWER_WICK_MIN:{label:'Lower wick minimum',value:true,placeholder:'0.35',help:'Lower wick ÷ range candle minimal nilai ini.'},
- UPPER_WICK_MIN:{label:'Upper wick minimum',value:true,placeholder:'0.35',help:'Upper wick ÷ range candle minimal nilai ini.'},
- CLOSE_LOCATION_MIN:{label:'Close location minimum',value:true,placeholder:'0.70',help:'0 = close di low, 1 = close di high.'},
- CLOSE_LOCATION_MAX:{label:'Close location maksimum',value:true,placeholder:'0.30',help:'0 = close di low, 1 = close di high.'},
- RANGE_ATR_MIN:{label:'Range candle minimum ATR',value:true,placeholder:'1.0',help:'Range candle minimal kelipatan ATR.'},
- RANGE_ATR_MAX:{label:'Range candle maksimum ATR',value:true,placeholder:'1.5',help:'Range candle maksimal kelipatan ATR.'},
- CLOSE_ABOVE_EMA_FAST:{label:'Close di atas EMA cepat',help:'Filter harga terhadap EMA cepat.'},
- CLOSE_BELOW_EMA_FAST:{label:'Close di bawah EMA cepat',help:'Filter harga terhadap EMA cepat.'},
- EMA_FAST_ABOVE_SLOW:{label:'EMA cepat di atas EMA lambat',help:'Filter arah trend bullish.'},
- EMA_FAST_BELOW_SLOW:{label:'EMA cepat di bawah EMA lambat',help:'Filter arah trend bearish.'},
- EMA_FAST_SLOPE_UP:{label:'EMA cepat menanjak',help:'EMA cepat sekarang lebih tinggi dari candle sebelumnya.'},
- EMA_FAST_SLOPE_DOWN:{label:'EMA cepat menurun',help:'EMA cepat sekarang lebih rendah dari candle sebelumnya.'},
- BREAKOUT_UP:{label:'Close breakout rolling high',value:true,placeholder:'0.05',help:'Nilai adalah buffer ATR di atas rolling high.'},
- BREAKOUT_DOWN:{label:'Close breakout rolling low',value:true,placeholder:'0.05',help:'Nilai adalah buffer ATR di bawah rolling low.'},
- SWEEP_LOW_RECLAIM:{label:'Sweep low lalu reclaim',value:true,placeholder:'0.05',help:'Low melewati rolling low lalu close kembali di atas.'},
- SWEEP_HIGH_RECLAIM:{label:'Sweep high lalu reclaim',value:true,placeholder:'0.05',help:'High melewati rolling high lalu close kembali di bawah.'},
- RBS_RETEST:{label:'RBS retest',value:true,placeholder:'0.15',help:'Nilai adalah toleransi retest dalam ATR.'},
- SBR_RETEST:{label:'SBR retest',value:true,placeholder:'0.15',help:'Nilai adalah toleransi retest dalam ATR.'},
- CLOSE_ABOVE_ROLLING_MID:{label:'Close di atas tengah rolling range',help:'Close di atas midpoint rolling high-low.'},
- CLOSE_BELOW_ROLLING_MID:{label:'Close di bawah tengah rolling range',help:'Close di bawah midpoint rolling high-low.'},
- DISTANCE_HIGH_ATR_MAX:{label:'Jarak ke rolling high maksimum ATR',value:true,placeholder:'0.5',help:'Jarak absolut close ke rolling high.'},
- DISTANCE_LOW_ATR_MAX:{label:'Jarak ke rolling low maksimum ATR',value:true,placeholder:'0.5',help:'Jarak absolut close ke rolling low.'},
- CONSECUTIVE_BULLISH_MIN:{label:'Candle bullish beruntun minimum',value:true,placeholder:'2',help:'Jumlah candle bullish berturut-turut.'},
- CONSECUTIVE_BEARISH_MIN:{label:'Candle bearish beruntun minimum',value:true,placeholder:'2',help:'Jumlah candle bearish berturut-turut.'},
- CLOSE_ABOVE_PREV_HIGH:{label:'Close di atas high candle sebelumnya',help:'Momentum satu candle.'},
- CLOSE_BELOW_PREV_LOW:{label:'Close di bawah low candle sebelumnya',help:'Momentum satu candle.'},
- HIGHER_HIGH_HIGHER_LOW:{label:'Higher high + higher low candle',help:'High dan low lebih tinggi dari candle sebelumnya.'},
- LOWER_HIGH_LOWER_LOW:{label:'Lower high + lower low candle',help:'High dan low lebih rendah dari candle sebelumnya.'},
- SESSION_HOUR:{label:'Jam UTC dalam rentang',value:true,value2:true,placeholder:'7',placeholder2:'16',help:'Nilai 1 = jam mulai, nilai 2 = jam selesai UTC.'}
-};
-const MIRROR={
- BULLISH_CANDLE:'BEARISH_CANDLE',BEARISH_CANDLE:'BULLISH_CANDLE',
- LOWER_WICK_MIN:'UPPER_WICK_MIN',UPPER_WICK_MIN:'LOWER_WICK_MIN',
- CLOSE_LOCATION_MIN:'CLOSE_LOCATION_MAX',CLOSE_LOCATION_MAX:'CLOSE_LOCATION_MIN',
- CLOSE_ABOVE_EMA_FAST:'CLOSE_BELOW_EMA_FAST',CLOSE_BELOW_EMA_FAST:'CLOSE_ABOVE_EMA_FAST',
- EMA_FAST_ABOVE_SLOW:'EMA_FAST_BELOW_SLOW',EMA_FAST_BELOW_SLOW:'EMA_FAST_ABOVE_SLOW',
- EMA_FAST_SLOPE_UP:'EMA_FAST_SLOPE_DOWN',EMA_FAST_SLOPE_DOWN:'EMA_FAST_SLOPE_UP',
- BREAKOUT_UP:'BREAKOUT_DOWN',BREAKOUT_DOWN:'BREAKOUT_UP',
- SWEEP_LOW_RECLAIM:'SWEEP_HIGH_RECLAIM',SWEEP_HIGH_RECLAIM:'SWEEP_LOW_RECLAIM',
- RBS_RETEST:'SBR_RETEST',SBR_RETEST:'RBS_RETEST',
- CLOSE_ABOVE_ROLLING_MID:'CLOSE_BELOW_ROLLING_MID',CLOSE_BELOW_ROLLING_MID:'CLOSE_ABOVE_ROLLING_MID',
- DISTANCE_HIGH_ATR_MAX:'DISTANCE_LOW_ATR_MAX',DISTANCE_LOW_ATR_MAX:'DISTANCE_HIGH_ATR_MAX',
- CONSECUTIVE_BULLISH_MIN:'CONSECUTIVE_BEARISH_MIN',CONSECUTIVE_BEARISH_MIN:'CONSECUTIVE_BULLISH_MIN',
- CLOSE_ABOVE_PREV_HIGH:'CLOSE_BELOW_PREV_LOW',CLOSE_BELOW_PREV_LOW:'CLOSE_ABOVE_PREV_HIGH',
- HIGHER_HIGH_HIGHER_LOW:'LOWER_HIGH_LOWER_LOW',LOWER_HIGH_LOWER_LOW:'HIGHER_HIGH_HIGHER_LOW'
-};
-
-function num(id){return Number($(id).value)}
-function fmt(value,digits=2){return Number(value||0).toLocaleString('en-US',{maximumFractionDigits:digits})}
-function money(value){return new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',maximumFractionDigits:2}).format(Number(value||0))}
-function esc(value){return String(value??'').replace(/[&<>'"]/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[ch]))}
-function rClass(value){return Number(value)>=0?'positive':'negative'}
-function setStatus(message,type=''){$('status').textContent=message;$('status').className=`status ${type}`.trim()}
-function setRunning(running){$('runButton').disabled=running;$('cancelButton').disabled=!running;$('progress').style.display=running?'block':'none'}
-function toggleStrategy(){const custom=$('strategyType').value==='custom_builder';$('builderPanel').classList.toggle('hidden',!custom);$('presetPanel').classList.toggle('hidden',custom)}
-function conditionOptions(selected){return Object.entries(CONDITION_DEFS).map(([key,def])=>`<option value="${key}" ${key===selected?'selected':''}>${esc(def.label)}</option>`).join('')}
-
-function addRule(side,type='BULLISH_CANDLE',value=0,value2=0){
- const container=$(side+'Rules'),def=CONDITION_DEFS[type]||CONDITION_DEFS.BULLISH_CANDLE;
- const card=document.createElement('div');card.className='rule-card';
- card.innerHTML=`<select class="condition-select">${conditionOptions(type)}</select>
-   <input class="condition-value" type="number" step="0.01" value="${Number(value)||0}" placeholder="${def.placeholder||'nilai'}">
-   <input class="condition-value2" type="number" step="0.01" value="${Number(value2)||0}" placeholder="${def.placeholder2||'nilai 2'}">
-   <button class="remove" type="button">×</button>
-   <div class="condition-help full">${esc(def.help||'')}</div>`;
- const select=card.querySelector('.condition-select'),v1=card.querySelector('.condition-value'),v2=card.querySelector('.condition-value2'),help=card.querySelector('.condition-help');
- function sync(){const d=CONDITION_DEFS[select.value];v1.style.visibility=d.value?'visible':'hidden';v2.style.visibility=d.value2?'visible':'hidden';v1.placeholder=d.placeholder||'nilai';v2.placeholder=d.placeholder2||'nilai 2';help.textContent=d.help||''}
- select.addEventListener('change',sync);card.querySelector('.remove').addEventListener('click',()=>card.remove());sync();container.appendChild(card)
-}
-function clearRules(side){$(side+'Rules').innerHTML=''}
-function readRules(side){return [...$(side+'Rules').querySelectorAll('.rule-card')].map(card=>({type:card.querySelector('.condition-select').value,value:Number(card.querySelector('.condition-value').value)||0,value2:Number(card.querySelector('.condition-value2').value)||0}))}
-function setRules(side,rules){clearRules(side);(rules||[]).forEach(r=>addRule(side,r.type,r.value,r.value2))}
-function mirrorRules(){
- const mirrored=readRules('buy').map(r=>{const type=MIRROR[r.type]||r.type;let value=r.value,value2=r.value2;if(r.type==='CLOSE_LOCATION_MIN')value=1-r.value;if(r.type==='CLOSE_LOCATION_MAX')value=1-r.value;return{type,value,value2}});
- setRules('sell',mirrored);$('sellLogic').value=$('buyLogic').value
-}
-function applyBuilderPreset(){
- const preset=$('builderPreset').value;
- if(preset==='rbs_trend'){
-  $('methodName').value='RBS SBR Trend';setRules('buy',[{type:'RBS_RETEST',value:.15},{type:'EMA_FAST_ABOVE_SLOW'},{type:'BULLISH_CANDLE'}]);mirrorRules()
- }else if(preset==='sweep_rejection'){
-  $('methodName').value='Sweep Rejection';setRules('buy',[{type:'SWEEP_LOW_RECLAIM',value:.05},{type:'LOWER_WICK_MIN',value:.35},{type:'BULLISH_CANDLE'}]);mirrorRules()
- }else if(preset==='breakout_momentum'){
-  $('methodName').value='Breakout Momentum';setRules('buy',[{type:'BREAKOUT_UP',value:.05},{type:'EMA_FAST_ABOVE_SLOW'},{type:'BODY_RATIO_MIN',value:.55},{type:'CLOSE_LOCATION_MIN',value:.7}]);mirrorRules()
- }else{clearRules('buy');clearRules('sell');addRule('buy');addRule('sell','BEARISH_CANDLE')}
-}
-
-function builderState(){return{
- method_name:$('methodName').value.trim(),direction_mode:$('directionMode').value,
- ema_fast_period:num('emaFast'),ema_slow_period:num('emaSlow'),buy_logic:$('buyLogic').value,sell_logic:$('sellLogic').value,
- sl_mode:$('slMode').value,cooldown_bars:num('cooldownBars'),buy_conditions:readRules('buy'),sell_conditions:readRules('sell')
-}}
-function applyBuilderState(state){
- if(!state)return;$('methodName').value=state.method_name||'Custom Method';$('directionMode').value=state.direction_mode||'both';
- $('emaFast').value=state.ema_fast_period||9;$('emaSlow').value=state.ema_slow_period||21;$('buyLogic').value=state.buy_logic||'all';$('sellLogic').value=state.sell_logic||'all';
- $('slMode').value=state.sl_mode||'signal_extreme';$('cooldownBars').value=state.cooldown_bars||0;setRules('buy',state.buy_conditions||[]);setRules('sell',state.sell_conditions||[])
-}
-function storedMethods(){try{return JSON.parse(localStorage.getItem('tradeMethodBuilderV1')||'{}')}catch{return{}}}
-function refreshSavedMethods(){const methods=storedMethods(),select=$('savedMethods'),current=select.value;select.innerHTML='<option value="">— Pilih metode —</option>'+Object.keys(methods).sort().map(name=>`<option value="${esc(name)}">${esc(name)}</option>`).join('');if(methods[current])select.value=current}
-function saveMethod(){const state=builderState(),name=state.method_name;if(!name){setStatus('Nama metode wajib diisi.','error');return}const methods=storedMethods();methods[name]=state;localStorage.setItem('tradeMethodBuilderV1',JSON.stringify(methods));refreshSavedMethods();$('savedMethods').value=name;setStatus(`Metode "${name}" disimpan di HP.`,'success')}
-function loadMethod(){const name=$('savedMethods').value,methods=storedMethods();if(!name||!methods[name]){setStatus('Pilih metode tersimpan.','error');return}applyBuilderState(methods[name]);setStatus(`Metode "${name}" dimuat.`,'success')}
-function deleteMethod(){const name=$('savedMethods').value,methods=storedMethods();if(!name||!methods[name])return;delete methods[name];localStorage.setItem('tradeMethodBuilderV1',JSON.stringify(methods));refreshSavedMethods();setStatus(`Metode "${name}" dihapus.`)}
-
-function buildConfig(){
- const common={timeframe:$('timeframe').value,lookback:num('lookback'),atr_period:num('atrPeriod'),sl_atr:num('slAtr'),stop_buffer_atr:.10,rr_ratio:num('rrRatio'),max_hold_bars:num('maxHold'),cost_per_trade_r:num('costR'),initial_capital:10000,risk_per_trade_pct:1};
- if($('strategyType').value==='custom_builder')return{...common,...builderState(),strategy_type:'custom_builder'};
- return{...common,strategy_type:'preset',mode:$('mode').value,min_penetration_atr:num('penetration'),min_wick_ratio:num('wickRatio'),acceptance_closes:num('acceptanceCloses'),min_body_ratio:num('bodyRatio'),close_location:num('closeLocation')}
-}
-function validateConfig(config){
- if(config.strategy_type==='custom_builder'){
-  if(!config.method_name)throw new Error('Nama metode wajib diisi.');
-  if(config.direction_mode!=='short_only'&&!config.buy_conditions.length)throw new Error('Tambahkan kondisi BUY.');
-  if(config.direction_mode!=='long_only'&&!config.sell_conditions.length)throw new Error('Tambahkan kondisi SELL.');
-  if(config.buy_conditions.length>12||config.sell_conditions.length>12)throw new Error('Maksimal 12 kondisi per arah.');
- }
- if(config.ema_fast_period>=config.ema_slow_period&&config.strategy_type==='custom_builder')setStatus('Catatan: EMA cepat biasanya lebih kecil dari EMA lambat, tetapi backtest tetap dijalankan.')
-}
-function renderBreakdown(target,rows){target.innerHTML=(rows||[]).map(row=>`<tr><td>${esc(row.name)}</td><td>${fmt(row.trades,0)}</td><td>${fmt(row.winrate)}%</td><td class="${rClass(row.total_r)}">${fmt(row.total_r,3)}R</td><td>${fmt(row.profit_factor,3)}</td></tr>`).join('')||'<tr><td colspan="5">Tidak ada trade.</td></tr>'}
-function renderTrades(rows){$('tradeRows').innerHTML=(rows||[]).slice().reverse().map(row=>`<tr><td>${esc(row.entry_time)}</td><td>${esc(row.setup)}</td><td>${esc(row.direction)}</td><td>${esc(row.reason)}</td><td>${fmt(row.bars_held,0)}</td><td class="${rClass(row.r_multiple)}">${fmt(row.r_multiple,3)}R</td></tr>`).join('')||'<tr><td colspan="6">Tidak ada trade.</td></tr>'}
-function drawEquity(points){const canvas=$('equityCanvas'),img=$('chart');img.style.display='none';if(!points||points.length<2){canvas.style.display='none';return}canvas.style.display='block';$('chartEmpty').style.display='none';const ratio=window.devicePixelRatio||1,width=Math.max(300,canvas.clientWidth||800),height=280;canvas.width=Math.floor(width*ratio);canvas.height=Math.floor(height*ratio);const ctx=canvas.getContext('2d');ctx.setTransform(ratio,0,0,ratio,0,0);ctx.clearRect(0,0,width,height);const values=points.map(p=>Number(p.equity)).filter(Number.isFinite),min=Math.min(...values),max=Math.max(...values),span=Math.max(1,max-min),pad=24;ctx.strokeStyle='#293449';ctx.lineWidth=1;for(let i=0;i<5;i++){const y=pad+(height-pad*2)*i/4;ctx.beginPath();ctx.moveTo(pad,y);ctx.lineTo(width-pad,y);ctx.stroke()}ctx.strokeStyle='#f0b84b';ctx.lineWidth=2;ctx.beginPath();values.forEach((v,i)=>{const x=pad+(width-pad*2)*i/Math.max(1,values.length-1),y=height-pad-(height-pad*2)*(v-min)/span;i?ctx.lineTo(x,y):ctx.moveTo(x,y)});ctx.stroke();ctx.fillStyle='#93a0b5';ctx.font='11px sans-serif';ctx.fillText(fmt(max,2),4,14);ctx.fillText(fmt(min,2),4,height-6)}
-function renderResult(result){const m=result.metrics||{};$('totalTrades').textContent=fmt(m.total_trades,0);$('winrate').textContent=`${fmt(m.winrate)}%`;$('profitFactor').textContent=fmt(m.profit_factor,3);$('expectancy').textContent=`${fmt(m.expectancy_r,4)}R`;$('totalR').textContent=`${fmt(m.total_r,3)}R`;$('maxDdR').textContent=`${fmt(m.max_drawdown_r,3)}R`;$('totalPnl').textContent=money(m.total_pnl);$('candles').textContent=fmt(result.run?.candles||0,0);renderBreakdown($('setupRows'),result.setup_breakdown);renderBreakdown($('directionRows'),result.direction_breakdown);renderTrades(result.trades);if(result.equity_points?.length)drawEquity(result.equity_points);else if(result.chart_base64){$('equityCanvas').style.display='none';$('chart').src=`data:image/png;base64,${result.chart_base64}`;$('chart').style.display='block';$('chartEmpty').style.display='none'}const run=result.run||{};setStatus(`Selesai: ${run.method_name||run.timeframe||'metode'} · ${fmt(run.selected_archives||1,0)} arsip · ${fmt(run.files||1,0)} file candle · ${fmt(run.candles||0,0)} candle · validasi OK.`,'success')}
-async function runWebPreset(file,config){if(config.strategy_type==='custom_builder')throw new Error('Method Builder hanya tersedia di APK Android lokal.');if(file?.name.toLowerCase().endsWith('.zip'))throw new Error('ZIP hanya diproses APK Android.');if(file&&file.size>4000000)throw new Error('CSV web terlalu besar; gunakan APK.');const payload={csv_text:file?await file.text():null,strategy_params:config,engine_params:{max_hold_bars:config.max_hold_bars,cost_per_trade_r:config.cost_per_trade_r}};const response=await fetch('/api/backtest',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});const result=await response.json();if(!response.ok||result.error)throw new Error(result.error||`HTTP ${response.status}`);return result}
-let activeBridge=null;
-async function runBacktest(){const file=$('dataFile').files[0],config=buildConfig();setRunning(true);setStatus('Menyiapkan backtest…');try{validateConfig(config);if(config.strategy_type==='custom_builder'){if(!nativeBuilder)throw new Error('Instal APK v2.3 untuk memakai Method Builder.');activeBridge=window.AndroidMethodBuilder;activeBridge.runSelectedFile(JSON.stringify(config));return}if(nativePreset){activeBridge=window.AndroidBacktest;activeBridge.runSelectedFile(JSON.stringify(config));return}const result=await runWebPreset(file,config);renderResult(result);setRunning(false)}catch(error){setStatus(`Gagal: ${error.message}`,'error');setRunning(false)}}
-window.NativeBacktest={onFileSelected(payload){setStatus(`${payload?.count||1} file dipilih: ${payload?.name||'arsip candle'}`)},onProgress(payload){setStatus(`${payload?.message||'Memproses…'} · ${fmt(payload?.files||0,0)} file · ${fmt(payload?.candles||0,0)} candle`)},onComplete(result){renderResult(result);setRunning(false);activeBridge=null},onError(payload){setStatus(`Gagal: ${payload?.message||'Kesalahan tidak diketahui.'}`,'error');setRunning(false);activeBridge=null}};
-
-$('strategyType').addEventListener('change',toggleStrategy);$('addBuyRule').addEventListener('click',()=>addRule('buy'));$('addSellRule').addEventListener('click',()=>addRule('sell','BEARISH_CANDLE'));$('applyPreset').addEventListener('click',applyBuilderPreset);$('mirrorRules').addEventListener('click',mirrorRules);$('saveMethod').addEventListener('click',saveMethod);$('loadMethod').addEventListener('click',loadMethod);$('deleteMethod').addEventListener('click',deleteMethod);$('runButton').addEventListener('click',runBacktest);$('cancelButton').addEventListener('click',()=>{if(activeBridge)activeBridge.cancel();setStatus('Membatalkan proses…')});$('dataFile').addEventListener('change',event=>{const files=[...event.target.files];if(files.length)setStatus(`${files.length} file dipilih · ${fmt(files.reduce((s,f)=>s+f.size,0)/1024/1024,2)} MB`)});
-toggleStrategy();applyBuilderPreset();refreshSavedMethods();
-</script>
-</body>
-</html>
+const $=id=>document.getElementById(id);const nativeBuilder=window.AndroidMethodBuilder;const nativeUpdater=window.AndroidUpdater;
+const REMOTE_PACK_URLS=['https://raw.githubusercontent.com/suhaimitoamy/trade-backtest/feature/acceptance-sweep-app-20260806/public/method-pack.json','https://raw.githubusercontent.com/suhaimitoamy/trade-backtest/master/public/method-pack.json'];
+const RELEASE_API='https://api.github.com/repos/suhaimitoamy/trade-backtest/releases/tags/trading-method-lab-preview';
+const DEFAULT_PACK={pack_version:0,notes:'Bundled fallback',templates:[{id:'blank',name:'Metode kosong',description:'Mulai dari nol.',config:{side:'both',buy_logic:'all',sell_logic:'all',buy_conditions:[],sell_conditions:[]}},{id:'rbs',name:'RBS/SBR tanpa EMA',description:'Retest level dengan candle konfirmasi.',config:{buy_conditions:[{type:'RBS_RETEST',value:.15,period:12},{type:'CANDLE_BULL'}],sell_conditions:[{type:'SBR_RETEST',value:.15,period:12},{type:'CANDLE_BEAR'}],sl_mode:'signal_extreme'}}]};
+const TYPES={
+'CANDLE_BULL':['Price Action','Candle bullish'], 'CANDLE_BEAR':['Price Action','Candle bearish'], 'BODY_RATIO_MIN':['Price Action','Body ratio minimum','value'], 'BODY_RATIO_MAX':['Price Action','Body ratio maksimum','value'], 'UPPER_WICK_MIN':['Price Action','Upper wick minimum','value'], 'LOWER_WICK_MIN':['Price Action','Lower wick minimum','value'], 'CLOSE_LOCATION_MIN':['Price Action','Close dekat high (min)','value'], 'CLOSE_LOCATION_MAX':['Price Action','Close dekat low (max)','value'], 'RANGE_ATR_MIN':['Volatilitas','Range/ATR minimum','value'], 'RANGE_ATR_MAX':['Volatilitas','Range/ATR maksimum','value'], 'BODY_ATR_MIN':['Volatilitas','Body/ATR minimum','value'],
+'EMA_FAST_ABOVE':['EMA (opsional)','EMA cepat > EMA lambat'], 'EMA_FAST_BELOW':['EMA (opsional)','EMA cepat < EMA lambat'], 'EMA_FAST_RISING':['EMA (opsional)','EMA cepat naik'], 'EMA_FAST_FALLING':['EMA (opsional)','EMA cepat turun'], 'EMA_SLOW_RISING':['EMA (opsional)','EMA lambat naik'], 'EMA_SLOW_FALLING':['EMA (opsional)','EMA lambat turun'],
+'BREAK_HIGH':['Level','Close breakout rolling high'], 'BREAK_LOW':['Level','Close breakout rolling low'], 'SWEEP_HIGH':['Level','Sweep rolling high','value'], 'SWEEP_LOW':['Level','Sweep rolling low','value'], 'RBS_RETEST':['SNR','RBS retest','value','period'], 'SBR_RETEST':['SNR','SBR retest','value','period'], 'RANGE_POSITION_MIN':['Level','Posisi rolling range minimum','value'], 'RANGE_POSITION_MAX':['Level','Posisi rolling range maksimum','value'], 'DIST_HIGH_ATR_MAX':['Level','Jarak ke rolling high max ATR','value'], 'DIST_LOW_ATR_MAX':['Level','Jarak ke rolling low max ATR','value'],
+'CONSECUTIVE_BULL':['Price Action','Candle bullish beruntun','period'], 'CONSECUTIVE_BEAR':['Price Action','Candle bearish beruntun','period'], 'CLOSE_ABOVE_PREV_HIGH':['Structure','Close > high sebelumnya'], 'CLOSE_BELOW_PREV_LOW':['Structure','Close < low sebelumnya'], 'HH_HL':['Structure','HH-HL satu candle'], 'LH_LL':['Structure','LH-LL satu candle'], 'SWING_HH_HL':['Structure','Swing HH-HL'], 'SWING_LH_LL':['Structure','Swing LH-LL'], 'BOS_UP':['ICT / Structure','BOS bullish'], 'BOS_DOWN':['ICT / Structure','BOS bearish'], 'CHOCH_UP':['ICT / Structure','CHOCH bullish'], 'CHOCH_DOWN':['ICT / Structure','CHOCH bearish'], 'MSS_UP':['ICT / Structure','MSS bullish'], 'MSS_DOWN':['ICT / Structure','MSS bearish'],
+'LIQUIDITY_SWEEP_MSS_BUY':['ICT','Sweep low + MSS bullish'], 'LIQUIDITY_SWEEP_MSS_SELL':['ICT','Sweep high + MSS bearish'], 'DISPLACEMENT_BULL':['ICT','Bullish displacement','value','value2'], 'DISPLACEMENT_BEAR':['ICT','Bearish displacement','value','value2'], 'FVG_BULL_ACTIVE':['ICT / FVG','Bullish FVG aktif'], 'FVG_BEAR_ACTIVE':['ICT / FVG','Bearish FVG aktif'], 'FVG_BULL_RETEST':['ICT / FVG','Bullish FVG retest'], 'FVG_BEAR_RETEST':['ICT / FVG','Bearish FVG retest'], 'OB_BULL_RETEST':['ICT / OB','Bullish order block retest'], 'OB_BEAR_RETEST':['ICT / OB','Bearish order block retest'], 'BREAKER_BULL_RETEST':['ICT / Breaker','Bullish breaker retest'], 'BREAKER_BEAR_RETEST':['ICT / Breaker','Bearish breaker retest'], 'EQUAL_HIGHS':['ICT / Liquidity','Equal highs','value'], 'EQUAL_LOWS':['ICT / Liquidity','Equal lows','value'], 'PREMIUM_ZONE':['ICT / PD Array','Premium zone','value'], 'DISCOUNT_ZONE':['ICT / PD Array','Discount zone','value'], 'EQUILIBRIUM_ZONE':['ICT / PD Array','Equilibrium zone','value'], 'OTE_BUY_ZONE':['ICT / Fibonacci','OTE buy 62–79%','value','value2'], 'OTE_SELL_ZONE':['ICT / Fibonacci','OTE sell 62–79%','value','value2'], 'FIB_RETRACE_BUY':['Fibonacci','Fib retrace buy','value','value2'], 'FIB_RETRACE_SELL':['Fibonacci','Fib retrace sell','value','value2'],
+'UTC_HOUR_RANGE':['Session','Rentang jam UTC','period','period2'], 'KILLZONE_ASIA':['Session','Asia killzone'], 'KILLZONE_LONDON':['Session','London killzone'], 'KILLZONE_NEW_YORK':['Session','New York killzone']};
+const MIRROR={'CANDLE_BULL':'CANDLE_BEAR','CANDLE_BEAR':'CANDLE_BULL','UPPER_WICK_MIN':'LOWER_WICK_MIN','LOWER_WICK_MIN':'UPPER_WICK_MIN','CLOSE_LOCATION_MIN':'CLOSE_LOCATION_MAX','CLOSE_LOCATION_MAX':'CLOSE_LOCATION_MIN','EMA_FAST_ABOVE':'EMA_FAST_BELOW','EMA_FAST_BELOW':'EMA_FAST_ABOVE','EMA_FAST_RISING':'EMA_FAST_FALLING','EMA_FAST_FALLING':'EMA_FAST_RISING','EMA_SLOW_RISING':'EMA_SLOW_FALLING','EMA_SLOW_FALLING':'EMA_SLOW_RISING','BREAK_HIGH':'BREAK_LOW','BREAK_LOW':'BREAK_HIGH','SWEEP_HIGH':'SWEEP_LOW','SWEEP_LOW':'SWEEP_HIGH','RBS_RETEST':'SBR_RETEST','SBR_RETEST':'RBS_RETEST','RANGE_POSITION_MIN':'RANGE_POSITION_MAX','RANGE_POSITION_MAX':'RANGE_POSITION_MIN','DIST_HIGH_ATR_MAX':'DIST_LOW_ATR_MAX','DIST_LOW_ATR_MAX':'DIST_HIGH_ATR_MAX','CONSECUTIVE_BULL':'CONSECUTIVE_BEAR','CONSECUTIVE_BEAR':'CONSECUTIVE_BULL','CLOSE_ABOVE_PREV_HIGH':'CLOSE_BELOW_PREV_LOW','CLOSE_BELOW_PREV_LOW':'CLOSE_ABOVE_PREV_HIGH','HH_HL':'LH_LL','LH_LL':'HH_HL','SWING_HH_HL':'SWING_LH_LL','SWING_LH_LL':'SWING_HH_HL','BOS_UP':'BOS_DOWN','BOS_DOWN':'BOS_UP','CHOCH_UP':'CHOCH_DOWN','CHOCH_DOWN':'CHOCH_UP','MSS_UP':'MSS_DOWN','MSS_DOWN':'MSS_UP','LIQUIDITY_SWEEP_MSS_BUY':'LIQUIDITY_SWEEP_MSS_SELL','LIQUIDITY_SWEEP_MSS_SELL':'LIQUIDITY_SWEEP_MSS_BUY','DISPLACEMENT_BULL':'DISPLACEMENT_BEAR','DISPLACEMENT_BEAR':'DISPLACEMENT_BULL','FVG_BULL_ACTIVE':'FVG_BEAR_ACTIVE','FVG_BEAR_ACTIVE':'FVG_BULL_ACTIVE','FVG_BULL_RETEST':'FVG_BEAR_RETEST','FVG_BEAR_RETEST':'FVG_BULL_RETEST','OB_BULL_RETEST':'OB_BEAR_RETEST','OB_BEAR_RETEST':'OB_BULL_RETEST','BREAKER_BULL_RETEST':'BREAKER_BEAR_RETEST','BREAKER_BEAR_RETEST':'BREAKER_BULL_RETEST','EQUAL_HIGHS':'EQUAL_LOWS','EQUAL_LOWS':'EQUAL_HIGHS','PREMIUM_ZONE':'DISCOUNT_ZONE','DISCOUNT_ZONE':'PREMIUM_ZONE','OTE_BUY_ZONE':'OTE_SELL_ZONE','OTE_SELL_ZONE':'OTE_BUY_ZONE','FIB_RETRACE_BUY':'FIB_RETRACE_SELL','FIB_RETRACE_SELL':'FIB_RETRACE_BUY'};
+let methodPack=DEFAULT_PACK,latestManifest=null;
+const num=id=>Number($(id).value),fmt=(v,d=2)=>Number(v||0).toLocaleString('en-US',{maximumFractionDigits:d}),esc=s=>String(s??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
+function setStatus(msg,type=''){$('status').textContent=msg;$('status').className=`status ${type}`.trim()}function setRunning(v){$('runButton').disabled=v;$('cancelButton').disabled=!v;$('progress').style.display=v?'block':'none'}
+function optionHtml(selected){const groups={};Object.entries(TYPES).forEach(([key,spec])=>(groups[spec[0]]??=[]).push([key,spec[1]]));return Object.entries(groups).map(([group,items])=>`<optgroup label="${esc(group)}">${items.map(([key,label])=>`<option value="${key}" ${key===selected?'selected':''}>${esc(label)}</option>`).join('')}</optgroup>`).join('')}
+function conditionRow(condition={type:'CANDLE_BULL',value:0,period:0,value2:0,period2:0,negate:false}){const row=document.createElement('div');row.className='condition';const spec=TYPES[condition.type]||TYPES.CANDLE_BULL;row.innerHTML=`<select class="ctype">${optionHtml(condition.type)}</select><input class="cvalue" type="number" step="0.01" value="${condition.value??0}" title="Nilai 1"><input class="cperiod" type="number" step="1" value="${condition.period||condition.value2||0}" title="Periode / nilai 2"><button class="remove">×</button>`;const update=()=>{const s=TYPES[row.querySelector('.ctype').value]||[];row.querySelector('.cvalue').style.visibility=s.includes('value')?'visible':'hidden';row.querySelector('.cperiod').style.visibility=(s.includes('period')||s.includes('value2')||s.includes('period2'))?'visible':'hidden';updateEmaState();scheduleAudit()};row.querySelector('.ctype').addEventListener('change',update);row.querySelector('.cvalue').addEventListener('input',scheduleAudit);row.querySelector('.cperiod').addEventListener('input',scheduleAudit);row.querySelector('.remove').onclick=()=>{row.remove();updateEmaState();scheduleAudit()};update();return row}
+function addCondition(side,condition){$(side+'Conditions').appendChild(conditionRow(condition))}
+function readConditions(side){return [...$(side+'Conditions').children].map(row=>{const type=row.querySelector('.ctype').value,spec=TYPES[type]||[],a=Number(row.querySelector('.cvalue').value||0),b=Number(row.querySelector('.cperiod').value||0),o={type};if(spec.includes('value'))o.value=a;if(spec.includes('value2'))o.value2=b;if(spec.includes('period'))o.period=Math.round(b);if(spec.includes('period2'))o.period2=Math.round(b);return o})}
+function buildConfig(){return{method_name:$('methodName').value.trim()||'Metode tanpa nama',timeframe:$('timeframe').value,side:$('side').value,buy_logic:$('buyLogic').value,sell_logic:$('sellLogic').value,buy_conditions:readConditions('buy'),sell_conditions:readConditions('sell'),lookback:num('lookback'),atr_period:num('atrPeriod'),ema_fast:num('emaFast'),ema_slow:num('emaSlow'),swing_left:num('swingLeft'),swing_right:num('swingRight'),structure_lookback:num('structureLookback'),fvg_lookback:num('fvgLookback'),ob_lookback:num('obLookback'),sl_mode:$('slMode').value,sl_atr:num('slAtr'),stop_buffer_atr:.10,rr_ratio:num('rrRatio'),max_hold_bars:num('maxHold'),cooldown_bars:num('cooldown'),cost_per_trade_r:num('costR'),initial_capital:10000,risk_per_trade_pct:1}}
+function applyConfig(c={}){const map={side:'side',buy_logic:'buyLogic',sell_logic:'sellLogic',lookback:'lookback',atr_period:'atrPeriod',ema_fast:'emaFast',ema_slow:'emaSlow',swing_left:'swingLeft',swing_right:'swingRight',structure_lookback:'structureLookback',fvg_lookback:'fvgLookback',ob_lookback:'obLookback',sl_mode:'slMode',sl_atr:'slAtr',rr_ratio:'rrRatio',max_hold_bars:'maxHold',cooldown_bars:'cooldown',cost_per_trade_r:'costR'};Object.entries(map).forEach(([key,id])=>{if(c[key]!==undefined)$(id).value=c[key]});if(c.method_name)$('methodName').value=c.method_name;$('buyConditions').innerHTML='';$('sellConditions').innerHTML='';(c.buy_conditions||[]).forEach(x=>addCondition('buy',x));(c.sell_conditions||[]).forEach(x=>addCondition('sell',x));updateEmaState();auditNow()}
+function updateEmaState(){const active=[...readConditions('buy'),...readConditions('sell')].some(x=>x.type.startsWith('EMA_'));$('emaFields').classList.toggle('hidden',!active);$('emaState').innerHTML=active?'<span class="badge warn">EMA aktif</span> Periode EMA memengaruhi sinyal.':'<span class="badge good">EMA nonaktif</span> Periode EMA diabaikan oleh engine.'}
+function mirrorBuy(){const sell=readConditions('buy').map(c=>({...c,type:MIRROR[c.type]||c.type}));$('sellConditions').innerHTML='';sell.forEach(x=>addCondition('sell',x));auditNow()}
+function renderTemplates(){const select=$('templateSelect');select.innerHTML=methodPack.templates.map(t=>`<option value="${esc(t.id)}">${esc(t.name)}</option>`).join('');showTemplateDescription();$('packBadge').textContent=`pack ${methodPack.pack_version??0}`}
+function showTemplateDescription(){const t=methodPack.templates.find(x=>x.id===$('templateSelect').value);$('templateDescription').textContent=t?.description||''}
+async function refreshPack(manual=false){for(const url of REMOTE_PACK_URLS){try{const r=await fetch(url+'?t='+Date.now(),{cache:'no-store'});if(!r.ok)continue;const p=await r.json();if(!Array.isArray(p.templates))continue;methodPack=p;localStorage.setItem('method_pack',JSON.stringify(p));renderTemplates();if(manual)$('updateStatus').textContent=`Pustaka metode diperbarui ke pack ${p.pack_version}.`;return}catch(e){}}if(manual)$('updateStatus').textContent='Pustaka online belum dapat diakses; memakai cache/bundled.'}
+function loadPack(){try{const saved=JSON.parse(localStorage.getItem('method_pack'));if(saved?.templates)methodPack=saved}catch(e){}renderTemplates();refreshPack(false)}
+function auditRender(a,target){if(!a||a.error){target.innerHTML=`<div class="audit-box negative">${esc(a?.error||'Audit tidak tersedia')}</div>`;return}const features=(a.features||[]).map(x=>`<span class="badge">${esc(x)}</span>`).join(' ');const warnings=(a.warnings||[]).map(x=>`<div class="warning">⚠ ${esc(x)}</div>`).join('')||'<div class="ok">Tidak ada konflik konfigurasi yang terdeteksi.</div>';let stats='';if(a.condition_stats?.length)stats=`<details><summary>Statistik setiap kondisi</summary><div class="table-wrap"><table><thead><tr><th>Kondisi</th><th>Evaluasi</th><th>Lolos</th><th>Rate</th></tr></thead><tbody>${a.condition_stats.map(s=>`<tr><td>${esc(s.condition)}</td><td>${fmt(s.evaluated,0)}</td><td>${fmt(s.passed,0)}</td><td>${fmt(s.pass_rate)}%</td></tr>`).join('')}</tbody></table></div></details>`;target.innerHTML=`<div class="audit-box"><strong>Fingerprint:</strong> ${esc(a.method_fingerprint||'-')}<br><strong>Fitur aktif:</strong> ${features||'Tidak ada'}<br><strong>EMA:</strong> ${a.ema_active?'AKTIF':'NONAKTIF — periode diabaikan'}${a.evaluated_bars!==undefined?`<br><strong>Bars dievaluasi:</strong> ${fmt(a.evaluated_bars,0)} · warmup ${fmt(a.warmup_blocked,0)} · konflik ${fmt(a.signal_conflicts,0)}`:''}</div>${warnings}${stats}`}
+function auditNow(){if(!nativeBuilder)return;try{auditRender(JSON.parse(nativeBuilder.auditMethod(JSON.stringify(buildConfig()))),$('preAudit'))}catch(e){}}
+let auditTimer;function scheduleAudit(){clearTimeout(auditTimer);auditTimer=setTimeout(auditNow,250)}
+function drawEquity(points){const c=$('equity'),ctx=c.getContext('2d'),ratio=devicePixelRatio||1,w=Math.max(300,c.clientWidth||800),h=280;c.width=w*ratio;c.height=h*ratio;ctx.setTransform(ratio,0,0,ratio,0,0);ctx.clearRect(0,0,w,h);const vals=(points||[]).map(p=>Number(p.equity)).filter(Number.isFinite);if(vals.length<2)return;const min=Math.min(...vals),max=Math.max(...vals),span=Math.max(1,max-min),pad=24;ctx.strokeStyle='#293449';for(let i=0;i<5;i++){const y=pad+(h-2*pad)*i/4;ctx.beginPath();ctx.moveTo(pad,y);ctx.lineTo(w-pad,y);ctx.stroke()}ctx.strokeStyle='#f0b84b';ctx.lineWidth=2;ctx.beginPath();vals.forEach((v,i)=>{const x=pad+(w-2*pad)*i/(vals.length-1),y=h-pad-(h-2*pad)*(v-min)/span;i?ctx.lineTo(x,y):ctx.moveTo(x,y)});ctx.stroke();ctx.fillStyle='#96a2b6';ctx.fillText(fmt(max),4,14);ctx.fillText(fmt(min),4,h-6)}
+function renderResult(r){const m=r.metrics||{};$('totalTrades').textContent=fmt(m.total_trades,0);$('winrate').textContent=fmt(m.winrate)+'%';$('profitFactor').textContent=fmt(m.profit_factor,3);$('expectancy').textContent=fmt(m.expectancy_r,4)+'R';$('totalR').textContent=fmt(m.total_r,3)+'R';$('totalR').className='value '+(m.total_r>=0?'positive':'negative');$('maxDd').textContent=fmt(m.max_drawdown_r,3)+'R';$('totalPnl').textContent='$'+fmt(m.total_pnl,2);$('candles').textContent=fmt(r.run?.candles,0);drawEquity(r.equity_points);auditRender(r.audit,$('resultAudit'));$('directionRows').innerHTML=(r.direction_breakdown||[]).map(x=>`<tr><td>${esc(x.name)}</td><td>${fmt(x.trades,0)}</td><td>${fmt(x.winrate)}%</td><td class="${x.total_r>=0?'positive':'negative'}">${fmt(x.total_r,3)}R</td><td>${fmt(x.profit_factor,3)}</td></tr>`).join('');$('tradeRows').innerHTML=(r.trades||[]).slice().reverse().map(x=>`<tr><td>${esc(x.entry_time)}</td><td>${esc(x.direction)}</td><td>${esc(x.reason)}</td><td>${fmt(x.bars_held,0)}</td><td class="${x.r_multiple>=0?'positive':'negative'}">${fmt(x.r_multiple,3)}R</td><td>${esc((x.matched||[]).join(' + '))}</td></tr>`).join('');setStatus(`Selesai: ${r.run?.method_name} · ${r.run?.timeframe} · ${fmt(r.run?.archives,0)} arsip · ${fmt(r.run?.files,0)} file · ${fmt(r.run?.candles,0)} candle.`,'success')}
+window.NativeMethodBuilder={onFileSelected:p=>setStatus(`${p.count} arsip dipilih.`),onProgress:p=>setStatus(`${p.message} · ${fmt(p.files,0)} file · ${fmt(p.candles,0)} candle`),onComplete:r=>{renderResult(r);setRunning(false)},onError:p=>{setStatus('Gagal: '+p.message,'error');setRunning(false)}};
+async function run(){if(!nativeBuilder){setStatus('Method Builder lengkap hanya tersedia di APK Android.','error');return}setRunning(true);setStatus('Memulai engine audited…');try{nativeBuilder.runSelectedFiles(JSON.stringify(buildConfig()))}catch(e){setStatus('Gagal: '+e.message,'error');setRunning(false)}}
+async function checkAppUpdate(){if(!nativeUpdater){$('updateStatus').textContent='Updater hanya tersedia dalam APK.';return}try{$('updateStatus').textContent='Memeriksa release channel…';const current=JSON.parse(nativeUpdater.getVersionInfo());const rr=await fetch(RELEASE_API+'?t='+Date.now(),{headers:{Accept:'application/vnd.github+json'},cache:'no-store'});if(!rr.ok)throw new Error('Release channel belum tersedia.');const release=await rr.json(),asset=release.assets?.find(x=>x.name==='update-manifest.json');if(!asset)throw new Error('Manifest update belum tersedia.');const mr=await fetch(asset.browser_download_url+'?t='+Date.now(),{cache:'no-store'}),manifest=await mr.json();latestManifest=manifest;if(Number(manifest.version_code)>Number(current.version_code)){$('updateStatus').textContent=`Update ${manifest.version_name} tersedia. ${manifest.notes||''}`;$('installUpdate').disabled=false}else{$('updateStatus').textContent=`Aplikasi sudah terbaru (${current.version_name}).`;$('installUpdate').disabled=true}}catch(e){$('updateStatus').textContent='Cek update gagal: '+e.message}}
+window.NativeUpdater={onProgress:p=>{$('updateStatus').textContent=`${p.message} ${p.percent>=0?p.percent+'%':''}`;$('cancelUpdate').disabled=false},onNeedsInstallPermission:()=>{$('updateStatus').textContent='Izinkan “instal aplikasi tidak dikenal”, lalu tekan Instal update lagi.';$('cancelUpdate').disabled=true},onInstallerOpened:()=>{$('updateStatus').textContent='Installer Android dibuka.';$('cancelUpdate').disabled=true},onError:p=>{$('updateStatus').textContent='Update gagal: '+p.message;$('cancelUpdate').disabled=true}};
+$('addBuy').onclick=()=>addCondition('buy',{type:'CANDLE_BULL'});$('addSell').onclick=()=>addCondition('sell',{type:'CANDLE_BEAR'});$('mirrorSell').onclick=mirrorBuy;$('auditButton').onclick=auditNow;$('runButton').onclick=run;$('cancelButton').onclick=()=>{nativeBuilder?.cancel();setStatus('Membatalkan…')};$('templateSelect').onchange=showTemplateDescription;$('applyTemplate').onclick=()=>{const t=methodPack.templates.find(x=>x.id===$('templateSelect').value);if(t)applyConfig({...t.config,method_name:t.name})};$('updatePack').onclick=()=>refreshPack(true);$('saveMethod').onclick=()=>{localStorage.setItem('saved_method',JSON.stringify(buildConfig()));setStatus('Metode disimpan di perangkat.','success')};$('loadMethod').onclick=()=>{try{applyConfig(JSON.parse(localStorage.getItem('saved_method')));setStatus('Metode dimuat.','success')}catch(e){setStatus('Belum ada metode tersimpan.','error')}};$('checkUpdate').onclick=checkAppUpdate;$('installUpdate').onclick=()=>{if(!latestManifest)return;$('cancelUpdate').disabled=false;nativeUpdater.startAppUpdate(latestManifest.download_url,latestManifest.sha256,latestManifest.signing_cert_sha256)};$('cancelUpdate').onclick=()=>nativeUpdater?.cancelAppUpdate();
+['side','lookback','atrPeriod','emaFast','emaSlow','swingLeft','swingRight','structureLookback','fvgLookback','obLookback','slMode','slAtr','rrRatio','maxHold','cooldown','costR','buyLogic','sellLogic'].forEach(id=>$(id).addEventListener('change',scheduleAudit));
+$('dataFile').addEventListener('change',e=>setStatus(`${e.target.files.length||1} arsip dipilih dari file picker.`));loadPack();applyConfig(DEFAULT_PACK.templates[1].config);checkAppUpdate();
+</script></body></html>
