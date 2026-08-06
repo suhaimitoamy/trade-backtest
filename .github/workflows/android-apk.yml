@@ -6,11 +6,11 @@ on:
       versionName:
         description: "Preview version name"
         required: true
-        default: "2.1.0-preview"
+        default: "2.2.0-preview"
       versionCode:
         description: "Preview version code"
         required: true
-        default: "2100"
+        default: "2200"
       webUrl:
         description: "Optional Vercel URL retained for compatibility"
         required: true
@@ -55,8 +55,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
-      APP_VERSION_NAME: ${{ github.event.inputs.versionName || '2.1.0-preview' }}
-      APP_VERSION_CODE: ${{ github.event.inputs.versionCode || '2100' }}
+      APP_VERSION_NAME: ${{ github.event.inputs.versionName || '2.2.0-preview' }}
+      APP_VERSION_CODE: ${{ github.event.inputs.versionCode || '2200' }}
       BACKTEST_WEB_URL: ${{ github.event.inputs.webUrl || vars.BACKTEST_WEB_URL || 'https://trade-backtest.vercel.app' }}
       APP_LABEL: Sweep Acceptance Lab
       PYTHONPATH: ${{ github.workspace }}
@@ -116,14 +116,15 @@ jobs:
             -PAPP_VERSION_CODE="$APP_VERSION_CODE" \
             -PAPP_LABEL="$APP_LABEL"
 
-      - name: Verify APK identity, offline dashboard and signature
+      - name: Verify APK identity, multi-file UI and signature
         run: |
           set -euo pipefail
           apk="android-app/app/build/outputs/apk/debug/app-debug.apk"
           "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$apk" \
             | grep -F "package: name='com.amy.sweepacceptancelab.debug' versionCode='${APP_VERSION_CODE}' versionName='${APP_VERSION_NAME}-debug'"
           unzip -Z1 "$apk" | grep -F "assets/index.html"
-          unzip -p "$apk" assets/index.html | grep -F "ZIP berisi ZIP bulanan"
+          unzip -p "$apk" assets/index.html | grep -F "Pilih satu atau banyak CSV/ZIP"
+          unzip -p "$apk" assets/index.html | grep -F "id=\"timeframe\""
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$apk"
           mkdir -p dist
           cp "$apk" "dist/Sweep-Acceptance-Lab-v${APP_VERSION_NAME}.apk"
