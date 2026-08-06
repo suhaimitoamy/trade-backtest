@@ -4,23 +4,26 @@ plugins {
 
 val configuredWebUrl = providers.gradleProperty("BACKTEST_WEB_URL")
     .orElse("https://trade-backtest.vercel.app")
+val configuredVersionName = providers.gradleProperty("APP_VERSION_NAME")
+    .orElse("2.0.0-preview")
+val configuredVersionCode = providers.gradleProperty("APP_VERSION_CODE")
+    .orElse("2000")
+val configuredAppLabel = providers.gradleProperty("APP_LABEL")
+    .orElse("Sweep Acceptance Lab")
 
 android {
     namespace = "com.amy.tradebacktest"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.amy.tradebacktest"
+        applicationId = "com.amy.sweepacceptancelab"
         minSdk = 23
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = configuredVersionCode.get().toInt()
+        versionName = configuredVersionName.get()
 
-        buildConfigField(
-            "String",
-            "WEB_URL",
-            "\"${configuredWebUrl.get()}\""
-        )
+        manifestPlaceholders["appLabel"] = configuredAppLabel.get()
+        buildConfigField("String", "WEB_URL", "\"${configuredWebUrl.get()}\"")
     }
 
     buildFeatures {
