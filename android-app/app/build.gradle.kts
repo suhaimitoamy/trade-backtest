@@ -5,9 +5,9 @@ plugins {
 val configuredWebUrl = providers.gradleProperty("BACKTEST_WEB_URL")
     .orElse("https://trade-backtest.vercel.app")
 val configuredVersionName = providers.gradleProperty("APP_VERSION_NAME")
-    .orElse("2.0.0-preview")
+    .orElse("2.1.0-preview")
 val configuredVersionCode = providers.gradleProperty("APP_VERSION_CODE")
-    .orElse("2000")
+    .orElse("2100")
 val configuredAppLabel = providers.gradleProperty("APP_LABEL")
     .orElse("Sweep Acceptance Lab")
 
@@ -24,6 +24,13 @@ android {
 
         manifestPlaceholders["appLabel"] = configuredAppLabel.get()
         buildConfigField("String", "WEB_URL", "\"${configuredWebUrl.get()}\"")
+    }
+
+    sourceSets {
+        getByName("main") {
+            // Package the same dashboard used by Vercel directly inside the APK.
+            assets.srcDir("../../public")
+        }
     }
 
     buildFeatures {
