@@ -1,133 +1,132 @@
-import pandas as pd
-import matplotlib
-matplotlib.use('Agg')
-import matplotlib.pyplot as plt
-import os
-import io
 import base64
+import io
+import os
 
-def generate_report(trades: pd.DataFrame, equity_curve: pd.DataFrame, output_dir: str = 'analysis/output'):
-    if not os.path.exists(output_dir):
-        os.makedirs(output_dir)
-        
-    print("="*40)
-    print("BACKTEST REPORT")
-    print("="*40)
-    
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+
+
+def _metrics(trades: pd.DataFrame, equity_curve: pd.DataFrame) -> dict:
     if trades.empty:
-        print("No trades executed.")
-        return
-        
-    total_trades = len(trades)
-    winning_trades = trades[trades['pnl_amount'] > 0]
-    winrate = len(winning_trades) / total_trades * 100
-    
-    total_pnl = trades['pnl_amount'].sum()
-    avg_r = trades['r_multiple'].mean()
-    expectancy = trades['pnl_amount'].mean()
-    
-    equity_curve['peak'] = equity_curve['equity'].cummax()
-    equity_curve['drawdown'] = (equity_curve['peak'] - equity_curve['equity']) / equity_curve['peak'] * 100
-    max_drawdown = equity_curve['drawdown'].max()
-    
-    print(f"Total Trades : {total_trades}")
-    print(f"Winrate      : {winrate:.2f}%")
-    print(f"Expectancy   : ${expectancy:.2f}")
-    print(f"Avg R-Mult   : {avg_r:.2f}R")
-    print(f"Total PnL    : ${total_pnl:.2f}")
-    print(f"Max Drawdown : {max_drawdown:.2f}%")
-    print("="*40)
-    
-    try:
-        trades['entry_time'] = pd.to_datetime(trades['entry_time'])
-        trades['year'] = trades['entry_time'].dt.year
-        
-        trades['hour'] = trades['entry_time'].dt.hour
-        def get_session(h):
-            if 1 <= h < 8: return 'Asian'
-            elif 8 <= h < 14: return 'London'
-            elif 14 <= h < 21: return 'New York'
-            else: return 'Sydney'
-        trades['session'] = trades['hour'].apply(get_session)
-        
-        yearly = trades.groupby('year').agg(
-            Trades=('pnl_amount', 'count'),
-            PnL=('pnl_amount', 'sum'),
-            Avg_R=('r_multiple', 'mean')
-        )
-        print("\nYearly Breakdown:")
-        print(yearly)
-        
-        session = trades.groupby('session').agg(
-            Trades=('pnl_amount', 'count'),
-            PnL=('pnl_amount', 'sum'),
-            Avg_R=('r_multiple', 'mean')
-        )
-        print("\nSession Breakdown:")
-        print(session)
-        
-    except Exception as e:
-        print(f"Could not generate breakdown: {e}")
-        
-    plt.figure(figsize=(10, 6))
-    equity_curve['timestamp'] = pd.to_datetime(equity_curve['timestamp'])
-    plt.plot(equity_curve['timestamp'], equity_curve['equity'], label='Equity', color='blue')
-    plt.title('Equity Curve')
-    plt.xlabel('Date')
-    plt.ylabel('Capital ($)')
-    plt.grid(True, alpha=0.3)
-    plt.legend()
-    
-    plot_path = os.path.join(output_dir, 'equity_curve.png')
-    plt.savefig(plot_path)
-    plt.close()
-    print(f"\nEquity curve saved to: {plot_path}")
+        return {
+            "total_trades": 0,
+            "winrate": 0.0,
+            "profit_factor": 0.0,
+            "expectancy_r": 0.0,
+            "avg_r_multiple": 0.0,
+            "total_r": 0.0,
+            "total_pnl": 0.0,
+            "max_drawdown": 0.0,
+            "max_drawdown_r": 0.0,
+        }
+
+    r = pd.to_numeric(trades["r_multiple"], errors="coerce").fillna(0.0)
+    gains = float(r[r > 0].sum())
+    losses = float(-r[r < 0].sum())
+    profit_factor = gains / losses if losses > 0 else (999.0 if gains > 0 else 0.0)
+
+    equity = equity_curve.copy()
+    equity["peak"] = equity["equity"].cummax()
+    equity["drawdown"] = (equity["peak"] - equity["equity"]) / equity["peak"] * 100
+
+    cumulative_r = r.cumsum()
+    peak_r = cumulative_r.cummax()
+    drawdown_r = peak_r - cumulative_r
+
+    return {
+        "total_trades": int(len(trades)),
+        "winrate": round(float((r > 0).mean() * 100), 2),
+        "profit_factor": round(float(profit_factor), 3),
+        "expectancy_r": round(float(r.mean()), 4),
+        "avg_r_multiple": round(float(r.mean()), 4),
+        "total_r": round(float(r.sum()), 3),
+        "total_pnl": round(float(trades["pnl_amount"].sum()), 2),
+        "max_drawdown": round(float(equity["drawdown"].max()), 2),
+        "max_drawdown_r": round(float(drawdown_r.max()), 3),
+    }
+
+
+def _breakdown(trades: pd.DataFrame, column: str) -> list[dict]:
+    if trades.empty or column not in trades.columns:
+        return []
+    rows = []
+    for name, group in trades.groupby(column, dropna=False):
+        r = pd.to_numeric(group["r_multiple"], errors="coerce").fillna(0.0)
+        gains = float(r[r > 0].sum())
+        losses = float(-r[r < 0].sum())
+        rows.append({
+            "name": str(name),
+            "trades": int(len(group)),
+            "winrate": round(float((r > 0).mean() * 100), 2),
+            "total_r": round(float(r.sum()), 3),
+            "avg_r": round(float(r.mean()), 4),
+            "profit_factor": round(gains / losses, 3) if losses > 0 else 999.0,
+        })
+    return sorted(rows, key=lambda item: item["name"])
+
+
+def generate_report(trades: pd.DataFrame, equity_curve: pd.DataFrame, output_dir: str = "analysis/output"):
+    os.makedirs(output_dir, exist_ok=True)
+    metrics = _metrics(trades, equity_curve)
+    print("=" * 44)
+    print("BACKTEST REPORT")
+    print("=" * 44)
+    for key, value in metrics.items():
+        print(f"{key:20}: {value}")
+
+    if not equity_curve.empty:
+        curve = equity_curve.copy()
+        curve["timestamp"] = pd.to_datetime(curve["timestamp"], errors="coerce")
+        plt.figure(figsize=(10, 6))
+        plt.plot(curve["timestamp"], curve["equity"], label="Equity")
+        plt.title("Equity Curve")
+        plt.xlabel("Date")
+        plt.ylabel("Capital")
+        plt.legend()
+        plt.tight_layout()
+        plt.savefig(os.path.join(output_dir, "equity_curve.png"))
+        plt.close()
+
 
 def generate_report_json(trades: pd.DataFrame, equity_curve: pd.DataFrame) -> dict:
-    """
-    Format report output for Vercel/API response.
-    Avoids writing any files to disk.
-    """
-    if trades.empty:
-        return {"error": "No trades executed."}
-        
-    total_trades = len(trades)
-    winning_trades = trades[trades['pnl_amount'] > 0]
-    winrate = len(winning_trades) / total_trades * 100
-    
-    total_pnl = trades['pnl_amount'].sum()
-    avg_r = trades['r_multiple'].mean()
-    expectancy = trades['pnl_amount'].mean()
-    
-    equity_curve['peak'] = equity_curve['equity'].cummax()
-    equity_curve['drawdown'] = (equity_curve['peak'] - equity_curve['equity']) / equity_curve['peak'] * 100
-    max_drawdown = equity_curve['drawdown'].max()
-    
-    # Generate Plot into Memory Buffer
-    plt.figure(figsize=(10, 6))
-    if 'timestamp' in equity_curve.columns:
-        equity_curve['timestamp'] = pd.to_datetime(equity_curve['timestamp'])
-        plt.plot(equity_curve['timestamp'], equity_curve['equity'], label='Equity', color='blue')
-    plt.title('Equity Curve')
-    plt.xlabel('Date')
-    plt.ylabel('Capital ($)')
-    plt.grid(True, alpha=0.3)
-    plt.legend()
-    
-    buf = io.BytesIO()
-    plt.savefig(buf, format='png')
-    buf.seek(0)
-    img_base64 = base64.b64encode(buf.read()).decode('utf-8')
-    plt.close()
-    
+    metrics = _metrics(trades, equity_curve)
+    chart_base64 = ""
+
+    if not equity_curve.empty:
+        curve = equity_curve.copy()
+        curve["timestamp"] = pd.to_datetime(curve["timestamp"], errors="coerce")
+        plt.figure(figsize=(10, 5))
+        plt.plot(curve["timestamp"], curve["equity"], label="Equity")
+        plt.title("Equity Curve")
+        plt.xlabel("Date")
+        plt.ylabel("Capital")
+        plt.legend()
+        plt.tight_layout()
+        buf = io.BytesIO()
+        plt.savefig(buf, format="png", dpi=120)
+        buf.seek(0)
+        chart_base64 = base64.b64encode(buf.read()).decode("utf-8")
+        plt.close()
+
+    preview_columns = [
+        "signal_time", "entry_time", "exit_time", "direction", "setup",
+        "entry_price", "exit_price", "sl", "tp", "bars_held",
+        "r_multiple", "reason",
+    ]
+    preview = []
+    if not trades.empty:
+        available = [col for col in preview_columns if col in trades.columns]
+        preview_df = trades[available].tail(100).copy()
+        preview_df = preview_df.replace({np.nan: None})
+        preview = preview_df.to_dict(orient="records")
+
     return {
-        "metrics": {
-            "total_trades": total_trades,
-            "winrate": round(winrate, 2),
-            "expectancy": round(expectancy, 2),
-            "avg_r_multiple": round(avg_r, 2),
-            "total_pnl": round(total_pnl, 2),
-            "max_drawdown": round(max_drawdown, 2)
-        },
-        "chart_base64": img_base64
+        "metrics": metrics,
+        "setup_breakdown": _breakdown(trades, "setup"),
+        "direction_breakdown": _breakdown(trades, "direction"),
+        "trades": preview,
+        "chart_base64": chart_base64,
     }
