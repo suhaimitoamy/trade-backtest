@@ -6,15 +6,15 @@ on:
       versionName:
         description: "Version name"
         required: true
-        default: "2.5.0-preview"
+        default: "2.6.0-preview"
       versionCode:
         description: "Monotonic version code"
         required: true
-        default: "2500"
+        default: "2600"
       notes:
         description: "Update notes"
         required: false
-        default: "Mobile UI sync, checklist rule builder, and native update checks without WebView fetch."
+        default: "Fix zero-trade rule accumulation, auto-replace templates, add FVG retest template, diagnostics, and native update race handling."
   push:
     branches: ["feature/acceptance-sweep-app-20260806"]
     paths:
@@ -36,9 +36,9 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  APP_VERSION_NAME: ${{ github.event.inputs.versionName || '2.5.0-preview' }}
-  APP_VERSION_CODE: ${{ github.event.inputs.versionCode || '2500' }}
-  UPDATE_NOTES: ${{ github.event.inputs.notes || 'Mobile UI sync, checklist rule builder, and native update checks without WebView fetch.' }}
+  APP_VERSION_NAME: ${{ github.event.inputs.versionName || '2.6.0-preview' }}
+  APP_VERSION_CODE: ${{ github.event.inputs.versionCode || '2600' }}
+  UPDATE_NOTES: ${{ github.event.inputs.notes || 'Fix zero-trade rule accumulation, auto-replace templates, add FVG retest template, diagnostics, and native update race handling.' }}
   APP_LABEL: Trading Method Lab
   KEYSTORE_PASSWORD: changeit-preview
   KEY_ALIAS: trading-method-lab
@@ -124,7 +124,7 @@ jobs:
             -PTML_KEY_ALIAS="$KEY_ALIAS" \
             -PTML_KEY_PASSWORD="$KEY_PASSWORD"
 
-      - name: Verify identity, mobile checklist, audit and signature
+      - name: Verify identity, checklist semantics, diagnostics and signature
         run: |
           set -euo pipefail
           apk="android-app/app/build/outputs/apk/release/app-release.apk"
@@ -133,13 +133,14 @@ jobs:
           unzip -Z1 "$apk" | grep -F "assets/index.html"
           unzip -Z1 "$apk" | grep -F "assets/method-pack.json"
           unzip -Z1 "$apk" | grep -F "assets/mobile-ui-patch.js"
-          unzip -p "$apk" assets/index.html | grep -F "Pusat pembaruan"
-          unzip -p "$apk" assets/mobile-ui-patch.js | grep -F "Pilih rule dengan checklist"
-          unzip -p "$apk" assets/mobile-ui-patch.js | grep -F "grid-template-columns:1fr!important"
+          unzip -p "$apk" assets/mobile-ui-patch.js | grep -F "Template mengganti rule lama"
+          unzip -p "$apk" assets/mobile-ui-patch.js | grep -F "Diagnosis 0 trade"
+          unzip -p "$apk" assets/mobile-ui-patch.js | grep -F "Cara gabung rule"
+          unzip -p "$apk" assets/method-pack.json | grep -F "FVG retest sederhana"
+          unzip -p "$apk" assets/method-pack.json | grep -F "tidak mensyaratkan BOS"
           grep -F "checkForUpdate" android-app/app/src/main/java/com/amy/tradebacktest/AppUpdateBridge.java
           grep -F "mobile-ui-patch.js" android-app/app/src/main/java/com/amy/tradebacktest/MainActivity.java
           grep -F "requirements.ema" android-app/app/src/main/java/com/amy/tradebacktest/AdvancedMethodBacktestBridge.java
-          grep -F "EMA nonaktif" public/index.html
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs "$apk"
 
       - name: Create update package and manifest
