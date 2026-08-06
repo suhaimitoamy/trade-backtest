@@ -1,67 +1,92 @@
-# Sweep Acceptance Lab
+# Trading Method Lab
 
-A modular Python backtest engine, FastAPI/Vercel dashboard, and installable Android application for testing **Sweep/Reclaim** versus **Acceptance Breakout** on OHLC candle data.
-
-## Method definitions
-
-The method uses a rolling high/low from completed candles only.
-
-- `SWEEP_LOW_RECLAIM` → Long: price trades below the prior rolling low, then the candle closes back above it with a minimum lower-wick ratio.
-- `SWEEP_HIGH_RECLAIM` → Short: price trades above the prior rolling high, then closes back below it with a minimum upper-wick ratio.
-- `ACCEPTANCE_ABOVE` → Long: one or more consecutive candles close above the prior rolling high; the final candle must have a sufficiently large body and close near its high.
-- `ACCEPTANCE_BELOW` → Short: mirrored bearish acceptance.
-
-Signals are read at candle close. Entries occur at the **next candle open**. If SL and TP are both inside the same candle, the engine uses the conservative `SL first` assumption.
+A modular Python backtest engine, FastAPI/Vercel dashboard, and installable Android application for testing fixed presets or building a trading method from no-code condition blocks.
 
 ## Android large-data mode
 
-The APK contains its own dashboard and a native Java streaming backtest engine. It does not send the archive to Vercel.
+The APK contains an offline dashboard and native Java streaming engines. Candle archives are not uploaded to Vercel.
 
-- Select a file directly from local storage or the Google Drive provider in Android's file picker.
-- Accepts one CSV/TXT, one ZIP containing hundreds of monthly CSV files, or a master ZIP containing monthly ZIP archives.
-- Entries are processed in natural filename order.
-- Indicator, pending-signal, open-trade, equity, and drawdown state continues across monthly file boundaries.
-- Data is read line by line. The complete archive is never expanded into RAM.
-- There is no hard 250,000-candle limit in the APK. A seven-million-candle archive is supported by the streaming design; practical limits are device cache/storage, battery, and processing time.
-- Nested ZIP depth is limited to three levels as protection against malformed archives.
-- The latest 100 trades and a compacted equity curve are retained for display; all candles still participate in the calculation.
+- Select multiple annual ZIP archives from Android storage or the Google Drive file provider.
+- Supports CSV/TXT, ZIP containing monthly candle files, and annual ZIP containing nested monthly ZIP archives.
+- Select one timeframe per run: M1, M5, M15, H1, H4, or D1.
+- Data is read line by line; the complete multi-million-candle archive is never loaded into RAM.
+- Indicator, pending signal, open position, equity, and drawdown state continue across monthly and annual file boundaries.
+- Strict validation cancels a result when OHLC is invalid, timestamps are duplicated, or time moves backward.
+- Signals use completed candles and enter at the next candle open.
+- If SL and TP are touched in the same candle, the conservative `SL first` assumption is used.
 
-The selected top-level ZIP is copied to temporary app cache so Android can access entries randomly and process them in chronological filename order. Temporary archive files are deleted when the run finishes.
+The browser/Vercel API remains limited to small CSV requests. The native Android engine has no hard 250,000-candle limit.
 
-## Web/API mode
+## No-code Method Builder
 
-The browser/Vercel version remains useful for small CSV tests. Its request limit is intentionally smaller:
+APK v2.3 adds a separate native custom-method engine in `MethodBuilderBridge.java`.
 
-- approximately 4 MB CSV text;
-- maximum 250,000 candles per API request.
+The user can create independent BUY and SELL rule sets, choose `ALL` or `ANY` logic, mirror BUY rules to SELL, save methods locally on the device, and choose execution parameters.
 
-Those are transport/serverless limits, not limits of the strategy or native Android engine.
+Available condition blocks include:
 
-## App features
+- bullish or bearish candle;
+- body, wick, and close-location ratios;
+- candle range relative to ATR;
+- EMA fast/slow trend and EMA slope;
+- rolling-high/low breakout;
+- sweep and reclaim;
+- RBS retest and SBR retest;
+- price position inside the rolling range;
+- distance from rolling high/low in ATR;
+- consecutive bullish/bearish candles;
+- close beyond the previous candle;
+- one-candle higher-high/higher-low or lower-high/lower-low structure;
+- UTC session-hour range.
 
-- Test Sweep only, Acceptance only, or both.
-- Change lookback, ATR, penetration, wick/body thresholds, RR, maximum hold, and cost in R.
-- View total trades, win rate, profit factor, expectancy, total R, drawdown, setup breakdown, direction breakdown, equity curve, and the latest trades.
-- Cancel a long local run without closing the application.
+Custom Stop Loss modes:
 
-CSV columns:
+- ATR only;
+- signal-candle extreme with an ATR minimum;
+- rolling high/low with an ATR minimum.
+
+The builder executes only predefined, validated rule blocks. It does not execute arbitrary code and does not automatically optimize rules against historical results.
+
+## Built-in Sweep / Acceptance preset
+
+The original preset remains available:
+
+- `SWEEP_LOW_RECLAIM` → Long after price trades below the rolling low and closes back above it.
+- `SWEEP_HIGH_RECLAIM` → mirrored Short signal.
+- `ACCEPTANCE_ABOVE` → Long after consecutive closes remain above the rolling high with body and close-location requirements.
+- `ACCEPTANCE_BELOW` → mirrored Short signal.
+
+## Results
+
+The application reports:
+
+- total trades and win rate;
+- profit factor and expectancy in R;
+- total R and monetary PnL;
+- maximum drawdown;
+- setup and direction breakdowns;
+- compacted equity curve;
+- the latest 100 trades.
+
+## CSV format
 
 ```text
 timestamp,open,high,low,close,volume
 ```
 
-`volume` is optional. `date` + `time`, `datetime`, and `timestamp` formats are accepted. Comma, semicolon, and tab-delimited files are detected automatically.
+`volume` is optional. `date` + `time`, `datetime`, and `timestamp` formats are accepted. Comma, semicolon, and tab delimiters are detected automatically.
 
 ## Project structure
 
-- `strategies/acceptance_sweep.py` — Python/API method definition.
+- `android-app/app/src/main/java/com/amy/tradebacktest/MethodBuilderBridge.java` — no-code custom rule evaluator and native streaming backtest engine.
+- `android-app/app/src/main/java/com/amy/tradebacktest/LocalZipBacktestBridge.java` — built-in Sweep/Acceptance native engine.
+- `android-app/app/src/main/java/com/amy/tradebacktest/MainActivity.java` — multi-file picker and JavaScript bridges.
+- `public/index.html` — offline/mobile dashboard and Method Builder UI.
+- `strategies/acceptance_sweep.py` — Python/API preset strategy.
 - `engine/backtest.py` — Python next-open candle engine.
-- `api/index.py` — FastAPI GET/POST API for small browser runs.
-- `public/index.html` — dashboard packaged both for Vercel and inside the APK.
-- `android-app/app/src/main/java/com/amy/tradebacktest/LocalZipBacktestBridge.java` — local ZIP reader and streaming multi-million-candle backtest engine.
-- `android-app/app/src/main/java/com/amy/tradebacktest/MainActivity.java` — Android file picker, Google Drive URI access, and WebView/native bridge.
+- `api/index.py` — FastAPI endpoint for small browser runs.
 - `analysis/report.py` — Python metrics and charts.
-- `tests/test_acceptance_sweep.py` — anti-regression tests for signal and execution truth.
+- `tests/test_acceptance_sweep.py` — preset execution regression tests.
 
 ## Run Python locally
 
@@ -71,31 +96,18 @@ pytest -q
 uvicorn api.index:app --reload --host 0.0.0.0 --port 8000
 ```
 
-Or run the CLI:
-
-```bash
-python main.py
-```
-
 ## Build Android APK
 
-GitHub Actions workflow: **Build Sweep Acceptance Preview APK**.
+GitHub Actions workflow: **Build Trading Method Lab Preview APK**.
 
-The workflow:
+The workflow runs Python tests and API smoke tests, compiles both native Android engines, packages the offline dashboard, verifies the builder UI and APK signature, and uploads an installable artifact.
 
-1. runs Python regression tests;
-2. smoke-tests the API engine;
-3. compiles the native Android ZIP engine;
-4. packages `public/index.html` as an offline APK asset;
-5. verifies package, version, embedded dashboard, and APK signature;
-6. uploads the APK artifact for 30 days.
-
-The Android package is separate from Amy FX:
+Android package:
 
 ```text
 com.amy.sweepacceptancelab.debug
 ```
 
-## Important limits
+## Important limitation
 
-This repository is a testing laboratory, not a claim that Sweep or Acceptance is profitable. A result is only meaningful when the same rule is tested with realistic costs, next-open execution, sufficient samples, and untouched out-of-sample data.
+This repository is a testing laboratory, not a claim that any preset or user-built method is profitable. A result is meaningful only when costs, sample size, timeframe, untouched out-of-sample periods, and parameter stability are evaluated honestly.
