@@ -25,6 +25,7 @@ public class MainActivity extends Activity {
     private WebView webView;
     private ValueCallback<Uri[]> filePathCallback;
     private LocalZipBacktestBridge backtestBridge;
+    private MethodBuilderBridge methodBuilderBridge;
 
     @Override
     @SuppressLint({"SetJavaScriptEnabled", "JavascriptInterface"})
@@ -47,7 +48,9 @@ public class MainActivity extends Activity {
         settings.setDisplayZoomControls(false);
 
         backtestBridge = new LocalZipBacktestBridge(this, webView);
+        methodBuilderBridge = new MethodBuilderBridge(this, webView);
         webView.addJavascriptInterface(backtestBridge, "AndroidBacktest");
+        webView.addJavascriptInterface(methodBuilderBridge, "AndroidMethodBuilder");
 
         webView.setWebChromeClient(new WebChromeClient() {
             @Override
@@ -120,9 +123,7 @@ public class MainActivity extends Activity {
             if (clipData != null) {
                 for (int i = 0; i < clipData.getItemCount(); i++) {
                     Uri uri = clipData.getItemAt(i).getUri();
-                    if (uri != null) {
-                        selected.add(uri);
-                    }
+                    if (uri != null) selected.add(uri);
                 }
             } else if (data.getData() != null) {
                 selected.add(data.getData());
@@ -142,6 +143,7 @@ public class MainActivity extends Activity {
         Uri[] result = selected.isEmpty() ? null : selected.toArray(new Uri[0]);
         if (!selected.isEmpty()) {
             backtestBridge.setSelectedFiles(selected);
+            methodBuilderBridge.setSelectedFiles(selected);
         }
         filePathCallback.onReceiveValue(result);
         filePathCallback = null;
@@ -171,12 +173,12 @@ public class MainActivity extends Activity {
             filePathCallback.onReceiveValue(null);
             filePathCallback = null;
         }
-        if (backtestBridge != null) {
-            backtestBridge.cancel();
-        }
+        if (backtestBridge != null) backtestBridge.cancel();
+        if (methodBuilderBridge != null) methodBuilderBridge.cancel();
         if (webView != null) {
             webView.stopLoading();
             webView.removeJavascriptInterface("AndroidBacktest");
+            webView.removeJavascriptInterface("AndroidMethodBuilder");
             webView.destroy();
         }
         super.onDestroy();
