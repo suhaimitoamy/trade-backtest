@@ -6,13 +6,13 @@ on:
       versionName:
         description: "Preview version name"
         required: true
-        default: "2.0.0-preview"
+        default: "2.1.0-preview"
       versionCode:
         description: "Preview version code"
         required: true
-        default: "2000"
+        default: "2100"
       webUrl:
-        description: "Deployed Vercel URL loaded by the Android app"
+        description: "Optional Vercel URL retained for compatibility"
         required: true
         default: "https://trade-backtest.vercel.app"
   push:
@@ -53,10 +53,10 @@ concurrency:
 jobs:
   test-and-build:
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 45
     env:
-      APP_VERSION_NAME: ${{ github.event.inputs.versionName || '2.0.0-preview' }}
-      APP_VERSION_CODE: ${{ github.event.inputs.versionCode || '2000' }}
+      APP_VERSION_NAME: ${{ github.event.inputs.versionName || '2.1.0-preview' }}
+      APP_VERSION_CODE: ${{ github.event.inputs.versionCode || '2100' }}
       BACKTEST_WEB_URL: ${{ github.event.inputs.webUrl || vars.BACKTEST_WEB_URL || 'https://trade-backtest.vercel.app' }}
       APP_LABEL: Sweep Acceptance Lab
       PYTHONPATH: ${{ github.workspace }}
@@ -116,12 +116,14 @@ jobs:
             -PAPP_VERSION_CODE="$APP_VERSION_CODE" \
             -PAPP_LABEL="$APP_LABEL"
 
-      - name: Verify APK identity and signature
+      - name: Verify APK identity, offline dashboard and signature
         run: |
           set -euo pipefail
           apk="android-app/app/build/outputs/apk/debug/app-debug.apk"
           "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$apk" \
             | grep -F "package: name='com.amy.sweepacceptancelab.debug' versionCode='${APP_VERSION_CODE}' versionName='${APP_VERSION_NAME}-debug'"
+          unzip -Z1 "$apk" | grep -F "assets/index.html"
+          unzip -p "$apk" assets/index.html | grep -F "ZIP berisi ZIP bulanan"
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$apk"
           mkdir -p dist
           cp "$apk" "dist/Sweep-Acceptance-Lab-v${APP_VERSION_NAME}.apk"
