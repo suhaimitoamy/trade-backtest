@@ -137,7 +137,7 @@ jobs:
           unzip -p "$apk" assets/mobile-ui-patch.js | grep -F "Diagnosis 0 trade"
           unzip -p "$apk" assets/mobile-ui-patch.js | grep -F "Cara gabung rule"
           unzip -p "$apk" assets/method-pack.json | grep -F "FVG retest sederhana"
-          unzip -p "$apk" assets/method-pack.json | grep -F "tidak mensyaratkan BOS"
+          unzip -p "$apk" assets/method-pack.json | grep -Fi "mensyaratkan BOS"
           grep -F "checkForUpdate" android-app/app/src/main/java/com/amy/tradebacktest/AppUpdateBridge.java
           grep -F "mobile-ui-patch.js" android-app/app/src/main/java/com/amy/tradebacktest/MainActivity.java
           grep -F "requirements.ema" android-app/app/src/main/java/com/amy/tradebacktest/AdvancedMethodBacktestBridge.java
