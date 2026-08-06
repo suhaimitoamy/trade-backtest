@@ -23,6 +23,8 @@ jobs:
           fetch-depth: 0
       - name: Decode audited v2.4 source payload
         run: python tools/apply_v24_payload.py
+      - name: Keep build workflow for a separate trusted update
+        run: git checkout HEAD -- .github/workflows/android-apk.yml
       - name: Commit generated application sources
         run: |
           git config user.name "github-actions[bot]"
