@@ -6,15 +6,15 @@ on:
       versionName:
         description: "Version name"
         required: true
-        default: "2.4.0-preview"
+        default: "2.5.0-preview"
       versionCode:
         description: "Monotonic version code"
         required: true
-        default: "2400"
+        default: "2500"
       notes:
         description: "Update notes"
         required: false
-        default: "ICT blocks, method audit, EMA isolation, remote method packs, and in-app updates."
+        default: "Mobile UI sync, checklist rule builder, and native update checks without WebView fetch."
   push:
     branches: ["feature/acceptance-sweep-app-20260806"]
     paths:
@@ -36,9 +36,9 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  APP_VERSION_NAME: ${{ github.event.inputs.versionName || '2.4.0-preview' }}
-  APP_VERSION_CODE: ${{ github.event.inputs.versionCode || '2400' }}
-  UPDATE_NOTES: ${{ github.event.inputs.notes || 'ICT blocks, method audit, EMA isolation, remote method packs, and in-app updates.' }}
+  APP_VERSION_NAME: ${{ github.event.inputs.versionName || '2.5.0-preview' }}
+  APP_VERSION_CODE: ${{ github.event.inputs.versionCode || '2500' }}
+  UPDATE_NOTES: ${{ github.event.inputs.notes || 'Mobile UI sync, checklist rule builder, and native update checks without WebView fetch.' }}
   APP_LABEL: Trading Method Lab
   KEYSTORE_PASSWORD: changeit-preview
   KEY_ALIAS: trading-method-lab
@@ -70,7 +70,7 @@ jobs:
           python -m pytest -q
 
       - name: Set up Java 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "17"
@@ -124,7 +124,7 @@ jobs:
             -PTML_KEY_ALIAS="$KEY_ALIAS" \
             -PTML_KEY_PASSWORD="$KEY_PASSWORD"
 
-      - name: Verify identity, ICT builder, audit and signature
+      - name: Verify identity, mobile checklist, audit and signature
         run: |
           set -euo pipefail
           apk="android-app/app/build/outputs/apk/release/app-release.apk"
@@ -132,9 +132,12 @@ jobs:
             | grep -F "package: name='com.amy.sweepacceptancelab' versionCode='${APP_VERSION_CODE}' versionName='${APP_VERSION_NAME}'"
           unzip -Z1 "$apk" | grep -F "assets/index.html"
           unzip -Z1 "$apk" | grep -F "assets/method-pack.json"
+          unzip -Z1 "$apk" | grep -F "assets/mobile-ui-patch.js"
           unzip -p "$apk" assets/index.html | grep -F "Pusat pembaruan"
-          unzip -p "$apk" assets/index.html | grep -F "AndroidUpdater"
-          unzip -p "$apk" assets/method-pack.json | grep -F "ICT: liquidity sweep + MSS + FVG"
+          unzip -p "$apk" assets/mobile-ui-patch.js | grep -F "Pilih rule dengan checklist"
+          unzip -p "$apk" assets/mobile-ui-patch.js | grep -F "grid-template-columns:1fr!important"
+          grep -F "checkForUpdate" android-app/app/src/main/java/com/amy/tradebacktest/AppUpdateBridge.java
+          grep -F "mobile-ui-patch.js" android-app/app/src/main/java/com/amy/tradebacktest/MainActivity.java
           grep -F "requirements.ema" android-app/app/src/main/java/com/amy/tradebacktest/AdvancedMethodBacktestBridge.java
           grep -F "EMA nonaktif" public/index.html
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs "$apk"
