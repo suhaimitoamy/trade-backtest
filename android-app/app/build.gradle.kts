@@ -5,11 +5,11 @@ plugins {
 val configuredWebUrl = providers.gradleProperty("BACKTEST_WEB_URL")
     .orElse("https://trade-backtest.vercel.app")
 val configuredVersionName = providers.gradleProperty("APP_VERSION_NAME")
-    .orElse("2.2.0-preview")
+    .orElse("2.3.0-preview")
 val configuredVersionCode = providers.gradleProperty("APP_VERSION_CODE")
-    .orElse("2200")
+    .orElse("2300")
 val configuredAppLabel = providers.gradleProperty("APP_LABEL")
-    .orElse("Sweep Acceptance Lab")
+    .orElse("Trading Method Lab")
 
 android {
     namespace = "com.amy.tradebacktest"
