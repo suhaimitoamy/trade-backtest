@@ -1,126 +1,231 @@
 {
   "schema_version": 1,
-  "pack_version": 4,
-  "updated_at": "2026-08-06T07:30:00Z",
+  "pack_version": 5,
+  "updated_at": "2026-08-06T15:05:00Z",
   "channel": "preview",
-  "notes": "ICT, swing structure, FVG, order block, breaker, OTE/Fibonacci, session, RBS/SBR, dan audit EMA-isolation.",
+  "notes": "Template v5 diaudit ulang: template berurutan yang mustahil pada satu candle diganti dengan kombinasi state + trigger. Ditambah FVG retest sederhana.",
   "templates": [
     {
       "id": "blank",
       "name": "Metode kosong",
-      "description": "Mulai dari nol tanpa ketergantungan indikator tersembunyi.",
-      "config": {"side":"both","buy_logic":"all","sell_logic":"all","buy_conditions":[],"sell_conditions":[]}
-    },
-    {
-      "id": "rbs_sbr_structure",
-      "name": "RBS/SBR + swing structure",
-      "description": "Retest level setelah breakout, dikonfirmasi struktur swing. Tidak memakai EMA.",
+      "description": "Mulai dari nol. Tidak ada rule aktif.",
       "config": {
-        "side":"both","buy_logic":"all","sell_logic":"all",
-        "buy_conditions":[
-          {"type":"RBS_RETEST","value":0.15,"period":12},
-          {"type":"SWING_HH_HL"},
-          {"type":"CANDLE_BULL"}
-        ],
-        "sell_conditions":[
-          {"type":"SBR_RETEST","value":0.15,"period":12},
-          {"type":"SWING_LH_LL"},
-          {"type":"CANDLE_BEAR"}
-        ],
-        "sl_mode":"swing_level","sl_atr":1.0,"rr_ratio":2.0,"cooldown_bars":3
+        "side": "both",
+        "buy_logic": "all",
+        "sell_logic": "all",
+        "buy_conditions": [],
+        "sell_conditions": []
       }
     },
     {
-      "id": "ict_sweep_mss_fvg",
-      "name": "ICT: liquidity sweep + MSS + FVG",
-      "description": "Sweep liquidity, perubahan struktur, lalu retest fair value gap. Definisi numerik dan causal.",
+      "id": "fvg_retest_simple",
+      "name": "FVG retest sederhana",
+      "description": "Entry pada retest FVG aktif dengan candle konfirmasi. Tidak mensyaratkan BOS dan retest terjadi pada candle yang sama.",
       "config": {
-        "side":"both","buy_logic":"all","sell_logic":"all",
-        "buy_conditions":[
-          {"type":"LIQUIDITY_SWEEP_MSS_BUY"},
-          {"type":"FVG_BULL_RETEST"},
-          {"type":"DISCOUNT_ZONE","value":0.55}
+        "side": "both",
+        "buy_logic": "all",
+        "sell_logic": "all",
+        "buy_conditions": [
+          {"type": "FVG_BULL_RETEST"},
+          {"type": "CANDLE_BULL"}
         ],
-        "sell_conditions":[
-          {"type":"LIQUIDITY_SWEEP_MSS_SELL"},
-          {"type":"FVG_BEAR_RETEST"},
-          {"type":"PREMIUM_ZONE","value":0.45}
+        "sell_conditions": [
+          {"type": "FVG_BEAR_RETEST"},
+          {"type": "CANDLE_BEAR"}
         ],
-        "sl_mode":"swing_level","sl_atr":1.0,"rr_ratio":2.0,"structure_lookback":40,"fvg_lookback":20
-      }
-    },
-    {
-      "id": "ict_ote_order_block",
-      "name": "ICT: OTE + order block + BOS",
-      "description": "Retracement 62–79% dari dealing swing ke order block setelah break of structure.",
-      "config": {
-        "side":"both","buy_logic":"all","sell_logic":"all",
-        "buy_conditions":[
-          {"type":"BOS_UP"},
-          {"type":"OTE_BUY_ZONE","value":0.62,"value2":0.79},
-          {"type":"OB_BULL_RETEST"}
-        ],
-        "sell_conditions":[
-          {"type":"BOS_DOWN"},
-          {"type":"OTE_SELL_ZONE","value":0.62,"value2":0.79},
-          {"type":"OB_BEAR_RETEST"}
-        ],
-        "sl_mode":"order_block","sl_atr":1.0,"rr_ratio":2.5,"ob_lookback":30
-      }
-    },
-    {
-      "id": "ict_breaker",
-      "name": "ICT: breaker retest",
-      "description": "Order block yang gagal dan berbalik fungsi menjadi breaker.",
-      "config": {
-        "side":"both","buy_logic":"all","sell_logic":"all",
-        "buy_conditions":[{"type":"BREAKER_BULL_RETEST"},{"type":"MSS_UP"},{"type":"CANDLE_BULL"}],
-        "sell_conditions":[{"type":"BREAKER_BEAR_RETEST"},{"type":"MSS_DOWN"},{"type":"CANDLE_BEAR"}],
-        "sl_mode":"signal_extreme","sl_atr":1.0,"rr_ratio":2.0
-      }
-    },
-    {
-      "id": "fvg_bos_continuation",
-      "name": "BOS + FVG continuation",
-      "description": "Displacement memecah swing lalu harga kembali ke FVG searah struktur.",
-      "config": {
-        "side":"both","buy_logic":"all","sell_logic":"all",
-        "buy_conditions":[{"type":"BOS_UP"},{"type":"FVG_BULL_RETEST"},{"type":"DISPLACEMENT_BULL","value":0.8,"value2":0.65}],
-        "sell_conditions":[{"type":"BOS_DOWN"},{"type":"FVG_BEAR_RETEST"},{"type":"DISPLACEMENT_BEAR","value":0.8,"value2":0.65}],
-        "sl_mode":"swing_level","sl_atr":1.0,"rr_ratio":2.0
+        "sl_mode": "signal_extreme",
+        "sl_atr": 1.0,
+        "rr_ratio": 2.0,
+        "fvg_lookback": 20,
+        "cooldown_bars": 1
       }
     },
     {
       "id": "market_structure_only",
       "name": "Market structure sederhana",
-      "description": "HH-HL/LH-LL berbasis swing pivot dan candle konfirmasi, tanpa EMA.",
+      "description": "State swing HH-HL/LH-LL dengan candle konfirmasi. Dibuat lebih longgar agar tidak menuntut tiga event langka pada satu candle.",
       "config": {
-        "side":"both","buy_logic":"all","sell_logic":"all",
-        "buy_conditions":[{"type":"SWING_HH_HL"},{"type":"CLOSE_ABOVE_PREV_HIGH"},{"type":"CANDLE_BULL"}],
-        "sell_conditions":[{"type":"SWING_LH_LL"},{"type":"CLOSE_BELOW_PREV_LOW"},{"type":"CANDLE_BEAR"}],
-        "sl_mode":"swing_level","sl_atr":1.0,"rr_ratio":2.0
+        "side": "both",
+        "buy_logic": "all",
+        "sell_logic": "all",
+        "buy_conditions": [
+          {"type": "SWING_HH_HL"},
+          {"type": "CANDLE_BULL"}
+        ],
+        "sell_conditions": [
+          {"type": "SWING_LH_LL"},
+          {"type": "CANDLE_BEAR"}
+        ],
+        "sl_mode": "swing_level",
+        "sl_atr": 1.0,
+        "rr_ratio": 2.0,
+        "cooldown_bars": 2
+      }
+    },
+    {
+      "id": "fvg_structure_continuation",
+      "name": "Structure + FVG continuation",
+      "description": "State struktur swing searah, lalu trigger retest FVG dan candle konfirmasi. BOS tidak dipaksa terjadi pada candle retest.",
+      "config": {
+        "side": "both",
+        "buy_logic": "all",
+        "sell_logic": "all",
+        "buy_conditions": [
+          {"type": "SWING_HH_HL"},
+          {"type": "FVG_BULL_RETEST"},
+          {"type": "CANDLE_BULL"}
+        ],
+        "sell_conditions": [
+          {"type": "SWING_LH_LL"},
+          {"type": "FVG_BEAR_RETEST"},
+          {"type": "CANDLE_BEAR"}
+        ],
+        "sl_mode": "swing_level",
+        "sl_atr": 1.0,
+        "rr_ratio": 2.0,
+        "fvg_lookback": 30,
+        "cooldown_bars": 2
+      }
+    },
+    {
+      "id": "ict_sweep_mss",
+      "name": "ICT: liquidity sweep + MSS",
+      "description": "Sweep liquidity yang masih aktif lalu MSS/CHOCH pada candle trigger. FVG tidak dipaksakan pada candle MSS yang sama.",
+      "config": {
+        "side": "both",
+        "buy_logic": "all",
+        "sell_logic": "all",
+        "buy_conditions": [
+          {"type": "LIQUIDITY_SWEEP_MSS_BUY"},
+          {"type": "CANDLE_BULL"}
+        ],
+        "sell_conditions": [
+          {"type": "LIQUIDITY_SWEEP_MSS_SELL"},
+          {"type": "CANDLE_BEAR"}
+        ],
+        "sl_mode": "swing_level",
+        "sl_atr": 1.0,
+        "rr_ratio": 2.0,
+        "structure_lookback": 40,
+        "cooldown_bars": 2
+      }
+    },
+    {
+      "id": "ict_ote_order_block",
+      "name": "ICT: OTE + order block",
+      "description": "State struktur swing, harga berada pada OTE 62-79%, lalu menyentuh order block. Tidak mensyaratkan BOS baru pada candle retest.",
+      "config": {
+        "side": "both",
+        "buy_logic": "all",
+        "sell_logic": "all",
+        "buy_conditions": [
+          {"type": "SWING_HH_HL"},
+          {"type": "OTE_BUY_ZONE", "value": 0.62, "value2": 0.79},
+          {"type": "OB_BULL_RETEST"}
+        ],
+        "sell_conditions": [
+          {"type": "SWING_LH_LL"},
+          {"type": "OTE_SELL_ZONE", "value": 0.62, "value2": 0.79},
+          {"type": "OB_BEAR_RETEST"}
+        ],
+        "sl_mode": "order_block",
+        "sl_atr": 1.0,
+        "rr_ratio": 2.5,
+        "ob_lookback": 40,
+        "cooldown_bars": 3
+      }
+    },
+    {
+      "id": "ict_breaker",
+      "name": "ICT: breaker retest",
+      "description": "Retest breaker dengan state struktur swing searah dan candle konfirmasi.",
+      "config": {
+        "side": "both",
+        "buy_logic": "all",
+        "sell_logic": "all",
+        "buy_conditions": [
+          {"type": "BREAKER_BULL_RETEST"},
+          {"type": "SWING_HH_HL"},
+          {"type": "CANDLE_BULL"}
+        ],
+        "sell_conditions": [
+          {"type": "BREAKER_BEAR_RETEST"},
+          {"type": "SWING_LH_LL"},
+          {"type": "CANDLE_BEAR"}
+        ],
+        "sl_mode": "signal_extreme",
+        "sl_atr": 1.0,
+        "rr_ratio": 2.0,
+        "ob_lookback": 40
+      }
+    },
+    {
+      "id": "rbs_sbr_simple",
+      "name": "RBS/SBR sederhana",
+      "description": "Retest support/resistance yang berganti fungsi dengan candle konfirmasi. Tidak memakai EMA.",
+      "config": {
+        "side": "both",
+        "buy_logic": "all",
+        "sell_logic": "all",
+        "buy_conditions": [
+          {"type": "RBS_RETEST", "value": 0.20, "period": 20},
+          {"type": "CANDLE_BULL"}
+        ],
+        "sell_conditions": [
+          {"type": "SBR_RETEST", "value": 0.20, "period": 20},
+          {"type": "CANDLE_BEAR"}
+        ],
+        "sl_mode": "signal_extreme",
+        "sl_atr": 1.0,
+        "rr_ratio": 2.0,
+        "lookback": 20,
+        "cooldown_bars": 1
       }
     },
     {
       "id": "london_sweep",
       "name": "London liquidity sweep",
-      "description": "Sweep rolling liquidity pada London killzone, tanpa EMA.",
+      "description": "Sweep rolling liquidity pada London killzone dengan wick minimum.",
       "config": {
-        "side":"both","buy_logic":"all","sell_logic":"all",
-        "buy_conditions":[{"type":"KILLZONE_LONDON"},{"type":"SWEEP_LOW","value":0.05},{"type":"LOWER_WICK_MIN","value":0.35}],
-        "sell_conditions":[{"type":"KILLZONE_LONDON"},{"type":"SWEEP_HIGH","value":0.05},{"type":"UPPER_WICK_MIN","value":0.35}],
-        "sl_mode":"signal_extreme","sl_atr":1.0,"rr_ratio":2.0
+        "side": "both",
+        "buy_logic": "all",
+        "sell_logic": "all",
+        "buy_conditions": [
+          {"type": "KILLZONE_LONDON"},
+          {"type": "SWEEP_LOW", "value": 0.05},
+          {"type": "LOWER_WICK_MIN", "value": 0.35}
+        ],
+        "sell_conditions": [
+          {"type": "KILLZONE_LONDON"},
+          {"type": "SWEEP_HIGH", "value": 0.05},
+          {"type": "UPPER_WICK_MIN", "value": 0.35}
+        ],
+        "sl_mode": "signal_extreme",
+        "sl_atr": 1.0,
+        "rr_ratio": 2.0
       }
     },
     {
       "id": "ema_optional",
       "name": "EMA pullback (indikator aktif)",
-      "description": "Template pembanding yang sengaja memakai EMA. Audit akan menandai EMA sebagai fitur aktif.",
+      "description": "Template pembanding yang sengaja memakai EMA. Audit menandai EMA sebagai fitur aktif.",
       "config": {
-        "side":"both","buy_logic":"all","sell_logic":"all",
-        "buy_conditions":[{"type":"EMA_FAST_ABOVE"},{"type":"EMA_FAST_RISING"},{"type":"CANDLE_BULL"}],
-        "sell_conditions":[{"type":"EMA_FAST_BELOW"},{"type":"EMA_FAST_FALLING"},{"type":"CANDLE_BEAR"}],
-        "sl_mode":"signal_extreme","sl_atr":1.0,"rr_ratio":2.0
+        "side": "both",
+        "buy_logic": "all",
+        "sell_logic": "all",
+        "buy_conditions": [
+          {"type": "EMA_FAST_ABOVE"},
+          {"type": "EMA_FAST_RISING"},
+          {"type": "CANDLE_BULL"}
+        ],
+        "sell_conditions": [
+          {"type": "EMA_FAST_BELOW"},
+          {"type": "EMA_FAST_FALLING"},
+          {"type": "CANDLE_BEAR"}
+        ],
+        "sl_mode": "signal_extreme",
+        "sl_atr": 1.0,
+        "rr_ratio": 2.0
       }
     }
   ]
