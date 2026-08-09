@@ -51,8 +51,7 @@ jobs:
             --output "raw/XAUUSD_${YEAR}_M1_DUKASCOPY_BID.csv" \
             --engine datafeed \
             --simple \
-            --resume \
-            --parallelism 8
+            --resume
           test -s "raw/XAUUSD_${YEAR}_M1_DUKASCOPY_BID.csv"
           head -n 3 "raw/XAUUSD_${YEAR}_M1_DUKASCOPY_BID.csv"
 
@@ -62,7 +61,7 @@ jobs:
           set -euo pipefail
           python -m pip install --quiet pandas
           cat > /tmp/build_year.py <<'PY'
-          import csv, hashlib, json, os, sys, zipfile
+          import hashlib, json, os, zipfile
           from pathlib import Path
           import pandas as pd
 
@@ -125,7 +124,6 @@ jobs:
           if len(work) == 0:
               raise SystemExit('No M1 candles returned')
 
-          # Resample only observed candles. No interpolation, no ffill, no synthetic M1 rows.
           rules = {'M5':'5min','M15':'15min','H1':'1h','H4':'4h','D1':'1D'}
           frames = {'M1': work[['open','high','low','close']].copy()}
           for tf, rule in rules.items():
@@ -205,7 +203,6 @@ jobs:
               z.write(report_path, report_path.name)
               z.write(manifest_path, manifest_path.name)
 
-          # Keep artifact compact: final yearly package + standalone audit metadata.
           for p in month_archives:
               p.unlink()
           print(report)
