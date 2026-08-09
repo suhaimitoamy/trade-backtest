@@ -17,7 +17,16 @@ def sha256(path: Path) -> str:
 
 def main() -> None:
     year = int(os.environ['YEAR'])
-    src = Path(f'raw/XAUUSD_{year}_M1_DUKASCOPY_BID.csv')
+    src = Path(os.environ.get('SOURCE_CSV', f'raw/XAUUSD_{year}_M1_SOURCE.csv'))
+    provider = os.environ.get('SOURCE_PROVIDER', 'Source not specified')
+    engine = os.environ.get('SOURCE_ENGINE', 'Source file import')
+    quote_side = os.environ.get('QUOTE_SIDE', 'source-defined / not independently verified')
+    timestamp_note = os.environ.get(
+        'TIMESTAMP_NOTE',
+        'Source wall time preserved; timezone not independently verified; no timezone shift applied',
+    )
+    assume_utc = os.environ.get('ASSUME_UTC', '0').strip() == '1'
+
     out = Path('output')
     out.mkdir(exist_ok=True)
 
@@ -41,7 +50,18 @@ def main() -> None:
 
     work = df[[dt_col, o_col, h_col, l_col, c_col]].copy()
     work.columns = ['datetime', 'open', 'high', 'low', 'close']
-    work['datetime'] = pd.to_datetime(work['datetime'], utc=True, errors='coerce')
+    if assume_utc:
+        work['datetime'] = pd.to_datetime(work['datetime'], utc=True, errors='coerce')
+    else:
+        work['datetime'] = pd.to_datetime(work['datetime'], errors='coerce')
+        # Preserve source wall time. If an offset-aware source is supplied, remove only
+        # its tz annotation without shifting its displayed clock time.
+        try:
+            if getattr(work['datetime'].dt, 'tz', None) is not None:
+                work['datetime'] = work['datetime'].dt.tz_localize(None)
+        except Exception:
+            pass
+
     for col in ['open', 'high', 'low', 'close']:
         work[col] = pd.to_numeric(work[col], errors='coerce')
 
@@ -75,6 +95,11 @@ def main() -> None:
     if work.empty:
         raise SystemExit('No M1 candles returned')
 
+    # Cadence diagnostic only. We do not invent missing minutes.
+    diffs = work.index.to_series().diff().dropna()
+    one_minute_count = int((diffs == pd.Timedelta(minutes=1)).sum())
+    cadence_1m_fraction = float(one_minute_count / len(diffs)) if len(diffs) else 0.0
+
     frames = {'M1': work[['open', 'high', 'low', 'close']].copy()}
     for tf, rule in {'M5': '5min', 'M15': '15min', 'H1': '1h', 'H4': '4h', 'D1': '1D'}.items():
         frame = work.resample(rule, origin='start_day', label='left', closed='left').agg(
@@ -92,7 +117,10 @@ def main() -> None:
         for tf in ['M1', 'M5', 'M15', 'H1', 'H4', 'D1']:
             frame = frames[tf]
             monthly = frame[(frame.index.year == year) & (frame.index.month == month)].reset_index()
-            monthly['datetime'] = monthly['datetime'].dt.strftime('%Y-%m-%d %H:%M:%S+00:00')
+            if assume_utc:
+                monthly['datetime'] = monthly['datetime'].dt.strftime('%Y-%m-%d %H:%M:%S+00:00')
+            else:
+                monthly['datetime'] = monthly['datetime'].dt.strftime('%Y-%m-%d %H:%M:%S')
             path = out / f'XAUUSD_{year}_{month:02d}_{tf}.csv'
             monthly.to_csv(path, index=False, columns=['datetime', 'open', 'high', 'low', 'close'])
             temp_files.append(path)
@@ -122,23 +150,26 @@ def main() -> None:
     first = work.index.min().isoformat()
     last = work.index.max().isoformat()
     clean_rows = len(work)
-    report = f'''XAUUSD MULTI-TIMEFRAME DATASET — {year}\n\nSOURCE\n- Provider: Dukascopy historical service\n- Instrument: XAUUSD\n- Quote side: BID\n- Source timeframe: M1\n- Retrieval engine: Dukascopy Jetta JSON via dukascopy-go v0.1.5\n- Timestamp normalization: UTC\n\nOUTPUT\n- Timeframes: M1, M5, M15, H1, H4, D1\n- CSV schema: datetime,open,high,low,close\n- Monthly archives created: {len(month_archives)}\n- First observed M1: {first}\n- Last observed M1: {last}\n\nAUDIT RESULTS\n- Source rows inspected: {source_rows}\n- Clean unique M1 candles retained: {clean_rows}\n- Exact duplicate rows removed: {exact_dup}\n- Conflicting duplicate timestamps: {conflicting}\n- Malformed/null rows: {malformed}\n- Invalid OHLC rows: {invalid_ohlc}\n\nIMPORTANT\n- No interpolation.\n- No forward fill.\n- No synthetic candles.\n- Upstream gaps are preserved.\n- Higher timeframes are aggregated only from observed M1 candles.\n'''
+    report = f'''XAUUSD MULTI-TIMEFRAME DATASET — {year}\n\nSOURCE\n- Provider: {provider}\n- Instrument: XAUUSD\n- Quote side: {quote_side}\n- Source timeframe: M1\n- Retrieval/source lineage: {engine}\n- Timestamp convention: {timestamp_note}\n\nOUTPUT\n- Timeframes: M1, M5, M15, H1, H4, D1\n- CSV schema: datetime,open,high,low,close\n- Monthly archives created: {len(month_archives)}\n- First observed M1: {first}\n- Last observed M1: {last}\n\nAUDIT RESULTS\n- Source rows inspected: {source_rows}\n- Clean unique M1 candles retained: {clean_rows}\n- Exact duplicate rows removed: {exact_dup}\n- Conflicting duplicate timestamps: {conflicting}\n- Malformed/null rows: {malformed}\n- Invalid OHLC rows: {invalid_ohlc}\n- Adjacent 1-minute cadence fraction: {cadence_1m_fraction:.6f}\n\nIMPORTANT\n- No interpolation.\n- No forward fill.\n- No synthetic candles.\n- Upstream gaps are preserved.\n- Higher timeframes are aggregated only from observed M1 candles.\n'''
     report_path = out / f'XAUUSD_{year}_AGGREGATION_REPORT.txt'
     report_path.write_text(report, encoding='utf-8')
 
     manifest = {
         'year': year,
-        'provider': 'Dukascopy historical service',
-        'retrieval_engine': 'Jetta JSON via dukascopy-go v0.1.5',
+        'provider': provider,
+        'retrieval_source_lineage': engine,
         'instrument': 'XAUUSD',
-        'side': 'BID',
+        'quote_side': quote_side,
         'source_timeframe': 'M1',
+        'timestamp_convention': timestamp_note,
         'source_rows': source_rows,
         'clean_m1_rows': clean_rows,
-        'first_m1_utc': first,
-        'last_m1_utc': last,
+        'first_m1': first,
+        'last_m1': last,
+        'adjacent_1m_cadence_fraction': cadence_1m_fraction,
         'no_interpolation': True,
         'no_forward_fill': True,
+        'no_synthetic_candles': True,
         'monthly_archives': [
             {'name': path.name, 'sha256': sha256(path), 'bytes': path.stat().st_size}
             for path in month_archives
