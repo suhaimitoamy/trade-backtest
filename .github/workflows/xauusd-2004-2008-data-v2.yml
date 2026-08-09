@@ -1,0 +1,177 @@
+name: XAUUSD 2004-2008 Data Builder v2
+
+on:
+  push:
+    branches:
+      - data/xauusd-2004-2008-builder
+    paths:
+      - .github/workflows/xauusd-2004-2008-data-v2.yml
+
+permissions:
+  contents: read
+
+jobs:
+  build-year:
+    name: Build XAUUSD ${{ matrix.year }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        year: [2004, 2005, 2006, 2007, 2008]
+    steps:
+      - name: Install dukascopy-go
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fL --retry 5 --retry-delay 2 \
+            https://github.com/Nosvemos/dukascopy-go/releases/download/v0.1.5/dukascopy-go_0.1.5_linux_amd64.tar.gz \
+            -o /tmp/dukascopy-go.tar.gz
+          mkdir -p /tmp/dukascopy-bin
+          tar -xzf /tmp/dukascopy-go.tar.gz -C /tmp/dukascopy-bin
+          BIN="$(find /tmp/dukascopy-bin -type f -name 'dukascopy-go' | head -n1)"
+          test -n "$BIN"
+          chmod +x "$BIN"
+          sudo cp "$BIN" /usr/local/bin/dukascopy-go
+          dukascopy-go version || true
+
+      - name: Download original Dukascopy BID M1
+        shell: bash
+        run: |
+          set -euo pipefail
+          YEAR=${{ matrix.year }}
+          NEXT=$((YEAR+1))
+          mkdir -p raw output
+          dukascopy-go download \
+            --symbol xauusd \
+            --timeframe m1 \
+            --side bid \
+            --from "${YEAR}-01-01" \
+            --to "${NEXT}-01-01" \
+            --output "raw/XAUUSD_${YEAR}_M1_DUKASCOPY_BID.csv" \
+            --engine datafeed \
+            --simple \
+            --resume
+          test -s "raw/XAUUSD_${YEAR}_M1_DUKASCOPY_BID.csv"
+          head -n 3 "raw/XAUUSD_${YEAR}_M1_DUKASCOPY_BID.csv"
+
+      - name: Audit and aggregate without gap filling
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --quiet pandas
+          cat > /tmp/build_year.py <<'PY'
+          import hashlib, json, os, zipfile
+          from pathlib import Path
+          import pandas as pd
+
+          year = int(os.environ['YEAR'])
+          src = Path(f'raw/XAUUSD_{year}_M1_DUKASCOPY_BID.csv')
+          out = Path('output')
+          out.mkdir(exist_ok=True)
+          df = pd.read_csv(src)
+          original_columns = list(df.columns)
+          norm = {str(c).strip().lower().replace(' ', '_'): c for c in df.columns}
+          def choose(names):
+              for name in names:
+                  if name in norm: return norm[name]
+              return None
+          dt_col = choose(['datetime','timestamp','time','date_time','date'])
+          o_col = choose(['open','bid_open'])
+          h_col = choose(['high','bid_high'])
+          l_col = choose(['low','bid_low'])
+          c_col = choose(['close','bid_close'])
+          if not all([dt_col,o_col,h_col,l_col,c_col]):
+              raise SystemExit(f'Unsupported CSV columns: {original_columns}')
+          work = df[[dt_col,o_col,h_col,l_col,c_col]].copy()
+          work.columns = ['datetime','open','high','low','close']
+          work['datetime'] = pd.to_datetime(work['datetime'], utc=True, errors='coerce')
+          for col in ['open','high','low','close']:
+              work[col] = pd.to_numeric(work[col], errors='coerce')
+          malformed = int(work.isna().any(axis=1).sum())
+          if malformed: raise SystemExit(f'Malformed/null source rows: {malformed}')
+          work = work.sort_values('datetime', kind='stable').reset_index(drop=True)
+          source_rows = len(work)
+          exact_dup = int(work.duplicated(subset=['datetime','open','high','low','close']).sum())
+          if exact_dup:
+              work = work.drop_duplicates(subset=['datetime','open','high','low','close'], keep='first')
+          dupts = work[work.duplicated(subset=['datetime'], keep=False)]
+          conflicting = 0
+          if len(dupts):
+              for _, g in dupts.groupby('datetime', sort=False):
+                  if len(g[['open','high','low','close']].drop_duplicates()) > 1: conflicting += 1
+          if conflicting: raise SystemExit(f'Conflicting duplicate timestamps: {conflicting}')
+          work = work.drop_duplicates(subset=['datetime'], keep='first')
+          invalid_ohlc = int(((work['high'] < work[['open','close']].max(axis=1)) |
+                              (work['low'] > work[['open','close']].min(axis=1)) |
+                              (work['high'] < work['low'])).sum())
+          if invalid_ohlc: raise SystemExit(f'Invalid OHLC rows: {invalid_ohlc}')
+          work = work.set_index('datetime')
+          if work.empty: raise SystemExit('No M1 candles returned')
+
+          frames = {'M1': work[['open','high','low','close']].copy()}
+          for tf, rule in {'M5':'5min','M15':'15min','H1':'1h','H4':'4h','D1':'1D'}.items():
+              r = work.resample(rule, origin='start_day', label='left', closed='left').agg(
+                  {'open':'first','high':'max','low':'min','close':'last'})
+              frames[tf] = r.dropna(subset=['open','high','low','close'])
+
+          month_archives, audit_rows = [], []
+          for month in range(1,13):
+              m1m = frames['M1'][(frames['M1'].index.year==year)&(frames['M1'].index.month==month)]
+              if m1m.empty: continue
+              temp=[]
+              for tf in ['M1','M5','M15','H1','H4','D1']:
+                  f=frames[tf]
+                  m=f[(f.index.year==year)&(f.index.month==month)].reset_index()
+                  m['datetime']=m['datetime'].dt.strftime('%Y-%m-%d %H:%M:%S+00:00')
+                  p=out/f'XAUUSD_{year}_{month:02d}_{tf}.csv'
+                  m.to_csv(p,index=False,columns=['datetime','open','high','low','close'])
+                  temp.append(p)
+                  audit_rows.append({'year':year,'month':month,'timeframe':tf,'rows':len(m),
+                    'first':m['datetime'].iloc[0] if len(m) else '', 'last':m['datetime'].iloc[-1] if len(m) else ''})
+              mz=out/f'XAUUSD_{year}_{month:02d}_MULTITF_REPAIRED_AUDITED.zip'
+              with zipfile.ZipFile(mz,'w',zipfile.ZIP_DEFLATED,compresslevel=6) as z:
+                  for p in temp: z.write(p,p.name)
+              month_archives.append(mz)
+              for p in temp: p.unlink()
+          if not month_archives: raise SystemExit('No monthly archives created')
+
+          audit_path=out/f'XAUUSD_{year}_AGGREGATION_AUDIT.csv'
+          pd.DataFrame(audit_rows).to_csv(audit_path,index=False)
+          first,last=work.index.min().isoformat(),work.index.max().isoformat()
+          clean_rows=len(work)
+          report=f'''XAUUSD MULTI-TIMEFRAME DATASET — {year}\n\nSOURCE\n- Provider: Dukascopy public Datafeed\n- Instrument: XAUUSD\n- Quote side: BID\n- Source timeframe: M1\n- Retrieval engine: datafeed (.bi5), via dukascopy-go v0.1.5\n- Timestamp normalization: UTC\n\nOUTPUT\n- Timeframes: M1, M5, M15, H1, H4, D1\n- CSV schema: datetime,open,high,low,close\n- Monthly archives created: {len(month_archives)}\n- First observed M1: {first}\n- Last observed M1: {last}\n\nAUDIT RESULTS\n- Source rows inspected: {source_rows}\n- Clean unique M1 candles retained: {clean_rows}\n- Exact duplicate rows removed: {exact_dup}\n- Conflicting duplicate timestamps: {conflicting}\n- Malformed/null rows: {malformed}\n- Invalid OHLC rows: {invalid_ohlc}\n\nIMPORTANT\n- No interpolation.\n- No forward fill.\n- No synthetic candles.\n- Upstream gaps are preserved.\n- Higher timeframes are aggregated only from observed M1 candles.\n'''
+          report_path=out/f'XAUUSD_{year}_AGGREGATION_REPORT.txt'; report_path.write_text(report,encoding='utf-8')
+          def sha256(p):
+              h=hashlib.sha256()
+              with open(p,'rb') as fh:
+                  for b in iter(lambda:fh.read(1024*1024),b''): h.update(b)
+              return h.hexdigest()
+          manifest={'year':year,'provider':'Dukascopy public Datafeed','instrument':'XAUUSD','side':'BID',
+            'source_timeframe':'M1','source_rows':source_rows,'clean_m1_rows':clean_rows,'first_m1_utc':first,
+            'last_m1_utc':last,'no_interpolation':True,'no_forward_fill':True,
+            'monthly_archives':[{'name':p.name,'sha256':sha256(p),'bytes':p.stat().st_size} for p in month_archives],
+            'raw_source_sha256':sha256(src)}
+          manifest_path=out/f'XAUUSD_{year}_AGGREGATION_MANIFEST.json'; manifest_path.write_text(json.dumps(manifest,indent=2),encoding='utf-8')
+          yearly=out/f'XAUUSD_{year}_MONTHLY_ARCHIVES_REPAIRED_AUDITED.zip'
+          with zipfile.ZipFile(yearly,'w',zipfile.ZIP_DEFLATED,compresslevel=6) as z:
+              for p in month_archives: z.write(p,p.name)
+              for p in [audit_path,report_path,manifest_path]: z.write(p,p.name)
+          for p in month_archives: p.unlink()
+          print(report)
+          print(f'YEARLY_PACKAGE={yearly} bytes={yearly.stat().st_size} sha256={sha256(yearly)}')
+          PY
+          YEAR=${{ matrix.year }} python /tmp/build_year.py
+
+      - name: Upload audited yearly package
+        uses: actions/upload-artifact@v4
+        with:
+          name: XAUUSD-${{ matrix.year }}-REPAIRED-AUDITED
+          path: |
+            output/XAUUSD_${{ matrix.year }}_MONTHLY_ARCHIVES_REPAIRED_AUDITED.zip
+            output/XAUUSD_${{ matrix.year }}_AGGREGATION_REPORT.txt
+            output/XAUUSD_${{ matrix.year }}_AGGREGATION_AUDIT.csv
+            output/XAUUSD_${{ matrix.year }}_AGGREGATION_MANIFEST.json
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7
