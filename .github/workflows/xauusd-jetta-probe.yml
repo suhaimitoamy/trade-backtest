@@ -1,0 +1,32 @@
+name: XAUUSD Jetta Probe
+
+on:
+  push:
+    branches:
+      - data/xauusd-2004-2008-builder
+    paths:
+      - .github/workflows/xauusd-jetta-probe.yml
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Install dukascopy-go
+        run: |
+          set -euo pipefail
+          curl -fL https://github.com/Nosvemos/dukascopy-go/releases/download/v0.1.5/dukascopy-go_0.1.5_linux_amd64.tar.gz -o /tmp/d.tar.gz
+          mkdir -p /tmp/d && tar -xzf /tmp/d.tar.gz -C /tmp/d
+          BIN="$(find /tmp/d -type f -name dukascopy-go | head -n1)"
+          chmod +x "$BIN" && sudo cp "$BIN" /usr/local/bin/dukascopy-go
+      - name: Probe Jetta M1 2004
+        run: |
+          set -euo pipefail
+          dukascopy-go download --symbol xauusd --timeframe m1 --side bid \
+            --from 2004-05-05 --to 2004-05-06 \
+            --output /tmp/xauusd_2004_probe.csv --engine jetta --simple
+          wc -l /tmp/xauusd_2004_probe.csv
+          head -n 5 /tmp/xauusd_2004_probe.csv
